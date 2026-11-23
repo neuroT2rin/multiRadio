@@ -19,6 +19,19 @@
   const PARTICLE_COUNT = 64;
   const STAR_COUNT = 90;
 
+  /** Палитры «Туннеля»: музыка меняет цвет и скорость их переключения. */
+  const TUNNEL_PALETTES = [
+    [186, 198, 210, 224, 258],
+    [262, 280, 296, 312, 332],
+    [12, 30, 348, 316, 288],
+    [150, 164, 178, 194, 208],
+    [36, 46, 26, 318, 288],
+  ];
+  const TUNNEL_CURVES = 9;
+
+  let tunnelProgress = 0;
+  let tunnelLastAt = 0;
+
   let canvas = null;
   let ctx = null;
   let width = 0;
@@ -425,71 +438,109 @@
     }
   }
 
+  function smoothStep(t) {
+    return t * t * (3 - 2 * t);
+  }
+
+  /** Кратчайший переход между оттенками по кругу. */
+  function lerpHue(from, to, t) {
+    const diff = ((to - from + 540) % 360) - 180;
+    return (from + diff * t + 360) % 360;
+  }
+
+  /** Сглаженная кривая Catmull-Rom по точкам. */
+  function traceSmooth(points) {
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const p0 = points[i - 1] || points[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[i + 2] || p2;
+      ctx.bezierCurveTo(
+        p1.x + (p2.x - p0.x) / 6,
+        p1.y + (p2.y - p0.y) / 6,
+        p2.x - (p3.x - p1.x) / 6,
+        p2.y - (p3.y - p1.y) / 6,
+        p2.x,
+        p2.y
+      );
+    }
+  }
+
+  /**
+   * «Туннель» — генеративные световые кривые (в духе AIMP).
+   * Форма кривых живёт по времени и не зависит от музыки: трек влияет
+   * только на цвет и скорость смены палитры.
+   */
   function drawTunnel(analysis, now, hue, energy, idle) {
-    const cx = width / 2;
-    const cy = height * 0.5;
     const level = idle ? 0 : utils.clamp(analysis.level, 0, 1);
-    const bass = idle ? 0 : utils.clamp(analysis.bass, 0, 1);
     const treble = idle ? 0 : utils.clamp(analysis.treble, 0, 1);
-    const maxRadius = Math.hypot(width, height) * 0.55;
-    const ringCount = 30;
-    const speed = 0.00005 + level * 0.00016 + bass * 0.00007;
-    const offset = (now * speed) % 1;
+
+    // Скорость цветораскладки: чем громче и «выше» музыка — тем быстрее.
+    const dt = tunnelLastAt ? Math.min(80, now - tunnelLastAt) / 1000 : 0.016;
+    tunnelLastAt = now;
+    const paletteSpeed = 0.08 + level * 0.55 + treble * 0.3 + beatFlash * 0.9;
+    tunnelProgress += dt * paletteSpeed;
+
+    const count = TUNNEL_PALETTES.length;
+    const current = Math.floor(tunnelProgress) % count;
+    const next = (current + 1) % count;
+    const mix = smoothStep(tunnelProgress - Math.floor(tunnelProgress));
+    const paletteA = TUNNEL_PALETTES[current];
+    const paletteB = TUNNEL_PALETTES[next];
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
 
-    // Спицы туннеля — задают перспективу.
-    for (let i = 0; i < 28; i += 1) {
-      const angle = (i / 28) * Math.PI * 2 + now * 0.00002;
-      ctx.beginPath();
-      ctx.moveTo(
-        cx + Math.cos(angle) * maxRadius * 0.04,
-        cy + Math.sin(angle) * maxRadius * 0.04
-      );
-      ctx.lineTo(cx + Math.cos(angle) * maxRadius, cy + Math.sin(angle) * maxRadius);
-      ctx.strokeStyle = hsla(hue + 20, 85, 58, 0.025 + energy * 0.035);
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
+    for (let index = 0; index < TUNNEL_CURVES; index += 1) {
+      const baseY = height * (0.14 + (index / (TUNNEL_CURVES - 1)) * 0.72);
+      const amplitude = height * (0.035 + (index % 3) * 0.02);
+      const shapeSpeed = 0.00025 + (index % 4) * 0.00005;
+      const phase = now * shapeSpeed + index * 1.9;
+      const points = new Array(72);
 
-    // Кольца, летящие из глубины на зрителя.
-    for (let i = 0; i < ringCount; i += 1) {
-      const p = (i / ringCount + offset) % 1;
-      const radius = maxRadius * Math.pow(p, 2.3);
-      if (radius < 1.5) continue;
+      for (let i = 0; i < points.length; i += 1) {
+        const t = i / (points.length - 1);
+        const y = baseY +
+          Math.sin(t * Math.PI * 2 * (1 + (index % 3) * 0.45) + phase) * amplitude +
+          Math.sin(t * Math.PI * 4.6 - phase * 0.6 + index) * amplitude * 0.42 +
+          Math.sin(t * 11 + now * 0.0009 + index * 0.7) * amplitude * 0.16;
+        points[i] = { x: t * width, y: y };
+      }
 
-      const depth = 1 - p;
-      const alpha = Math.pow(depth, 0.6) * (0.1 + energy * 0.24) * (0.35 + p);
-      const wobble = 1 + bass * 0.015 * Math.sin(now * 0.0024 + i * 0.9);
+      const paletteIndex = index % paletteA.length;
+      const curveHue = lerpHue(paletteA[paletteIndex], paletteB[paletteIndex], mix) +
+        Math.sin(now * 0.00018 + index) * 6;
+      const alpha = 0.1 + energy * 0.12;
 
       ctx.beginPath();
-      ctx.arc(cx, cy, radius * wobble, 0, Math.PI * 2);
-      ctx.strokeStyle = hsla(hue + p * 90 + treble * 20, 92, 64, Math.min(1, alpha));
-      ctx.lineWidth = 0.7 + p * 3.4;
+      traceSmooth(points);
+      ctx.strokeStyle = hsla(curveHue, 88, 62, alpha);
+      ctx.lineWidth = 3.4 + (index % 3) * 1.4;
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = hsla(curveHue, 95, 65, 0.5);
+      ctx.stroke();
+
+      ctx.beginPath();
+      traceSmooth(points);
+      ctx.strokeStyle = hsla(curveHue, 94, 74, 0.28 + energy * 0.3);
+      ctx.lineWidth = 1.1;
       ctx.stroke();
     }
-
-    // Свечение в центре туннеля.
-    const glowRadius = maxRadius * (0.16 + level * 0.08 + beatFlash * 0.03);
-    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
-    glow.addColorStop(0, hsla(hue + 50, 95, 74, 0.3 + energy * 0.3));
-    glow.addColorStop(0.45, hsla(hue + 25, 90, 62, 0.1 + energy * 0.1));
-    glow.addColorStop(1, hsla(hue, 90, 55, 0));
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
-    ctx.fill();
 
     ctx.restore();
 
-    if (beatFlash > 0.02) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, maxRadius * (0.55 + (1 - beatFlash) * 0.4), 0, Math.PI * 2);
-      ctx.strokeStyle = hsla(hue + 50, 95, 72, beatFlash * 0.2);
-      ctx.lineWidth = 2.2;
-      ctx.stroke();
-    }
+    // Мягкая цветная дымка, привязанная к текущей палитре.
+    const fogHue = lerpHue(paletteA[0], paletteB[0], mix);
+    const fog = ctx.createRadialGradient(
+      width * 0.5, height * 0.5, 0,
+      width * 0.5, height * 0.5, Math.min(width, height) * 0.62
+    );
+    fog.addColorStop(0, hsla(fogHue, 85, 55, 0.05 + energy * 0.05));
+    fog.addColorStop(1, hsla(fogHue, 85, 45, 0));
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, 0, width, height);
   }
 
   function drawSpiral(analysis, now, hue, energy, idle) {
