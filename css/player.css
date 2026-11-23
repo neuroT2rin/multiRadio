@@ -300,6 +300,11 @@ input[type="range"].range:focus-visible {
   overflow-y: auto;
 }
 
+/* Строки не сжимаются, когда станций много: список прокручивается. */
+.stations-list > .station-row {
+  flex: 0 0 auto;
+}
+
 .station-row {
   display: flex;
   align-items: center;
