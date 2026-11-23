@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MultiRadio — многофункциональное интернет-радио</title>
+  <meta name="description" content="Интернет-радио с резервными источниками, 10-полосным эквалайзером, группами станций и живой визуализацией звука." />
+  <meta name="theme-color" content="#060a14" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%BB%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/player.css" />
+  <link rel="stylesheet" href="css/visualizer.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+
+  <!-- Фоновая визуализация: всегда позади интерфейса -->
+  <div class="bg-visualizer" id="bg-visualizer" aria-hidden="true">
+    <canvas id="bg-canvas"></canvas>
+    <div class="bg-visualizer__vignette"></div>
+  </div>
+
+  <header class="app-header" id="app-header">
+    <div class="header-inner">
+      <a class="brand" href="#" id="brand-link" aria-label="MultiRadio — на главную">
+        <span class="brand__mark" aria-hidden="true">📻</span>
+        <span class="brand__text">Multi<span>Radio</span></span>
+      </a>
+
+      <nav class="main-nav" id="main-nav" aria-label="Главное меню">
+        <div class="nav-group" data-nav-group>
+          <button class="nav-btn" type="button" aria-expanded="false" aria-haspopup="true">
+            Радио <span class="nav-btn__chev" aria-hidden="true">▾</span>
+          </button>
+          <div class="nav-menu">
+            <p class="nav-menu__label">Разделы</p>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="true" data-command="view:stations">
+              <span class="nav-item__ico" aria-hidden="true">📻</span> Все станции
+            </button>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="view:favorites">
+              <span class="nav-item__ico" aria-hidden="true">★</span> Избранные
+            </button>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="view:equalizer">
+              <span class="nav-item__ico" aria-hidden="true">🎛</span> Эквалайзер
+            </button>
+            <div class="nav-divider"></div>
+            <p class="nav-menu__label">Коллекция</p>
+            <button class="nav-item" type="button" data-command="station:add">
+              <span class="nav-item__ico" aria-hidden="true">➕</span> Добавить станцию
+            </button>
+            <button class="nav-item" type="button" data-command="group:create">
+              <span class="nav-item__ico" aria-hidden="true">🗂</span> Создать группу
+            </button>
+            <button class="nav-item" type="button" data-command="health:check">
+              <span class="nav-item__ico" aria-hidden="true">🔄</span> Проверить станции
+            </button>
+          </div>
+        </div>
+
+        <div class="nav-group" data-nav-group>
+          <button class="nav-btn" type="button" aria-expanded="false" aria-haspopup="true">
+            Вид <span class="nav-btn__chev" aria-hidden="true">▾</span>
+          </button>
+          <div class="nav-menu">
+            <p class="nav-menu__label">Фон</p>
+            <button class="nav-item" type="button" role="menuitemcheckbox" aria-checked="true" data-command="ui:toggle-bg">
+              <span class="nav-item__ico" aria-hidden="true">🌌</span> Фоновая визуализация
+            </button>
+            <div class="nav-divider"></div>
+            <p class="nav-menu__label">Режим визуализации</p>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="true" data-command="ui:mode" data-mode="spectrum">
+              <span class="nav-item__ico" aria-hidden="true">🌈</span> Круговой спектр
+            </button>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="ui:mode" data-mode="aurora">
+              <span class="nav-item__ico" aria-hidden="true">🌊</span> Аврора
+            </button>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="ui:mode" data-mode="orbit">
+              <span class="nav-item__ico" aria-hidden="true">🪐</span> Орбиты
+            </button>
+          </div>
+        </div>
+
+        <div class="nav-group" data-nav-group>
+          <button class="nav-btn" type="button" aria-expanded="false" aria-haspopup="true">
+            Данные <span class="nav-btn__chev" aria-hidden="true">▾</span>
+          </button>
+          <div class="nav-menu">
+            <p class="nav-menu__label">Настройки</p>
+            <button class="nav-item" type="button" data-command="settings:open">
+              <span class="nav-item__ico" aria-hidden="true">⚙</span> Настройки приложения
+            </button>
+            <button class="nav-item" type="button" data-command="settings:export">
+              <span class="nav-item__ico" aria-hidden="true">📤</span> Экспорт настроек
+            </button>
+            <button class="nav-item" type="button" data-command="settings:import">
+              <span class="nav-item__ico" aria-hidden="true">📥</span> Импорт настроек
+            </button>
+            <div class="nav-divider"></div>
+            <button class="nav-item nav-item--danger" type="button" data-command="settings:reset">
+              <span class="nav-item__ico" aria-hidden="true">↺</span> Сброс к умолчаниям
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="header-meta">
+        <div class="status-bar">
+          <span class="badge" id="network-badge" data-state="pending" title="Состояние сети">
+            <span class="badge__dot" aria-hidden="true"></span>
+            <span id="network-badge-text">Сеть: проверка…</span>
+          </span>
+          <span class="badge" id="stream-status" data-state="idle" role="status" aria-live="polite">Готов к запуску</span>
+        </div>
+        <button class="nav-toggle" type="button" id="nav-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="Открыть меню">
+          <span class="nav-toggle__bars" aria-hidden="true"><span></span><span></span><span></span></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Прогресс проверки станций на откликаемость -->
+    <div class="health-progress" id="health-progress" role="progressbar" aria-label="Проверка станций" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+      <div class="health-progress__track"><span class="health-progress__fill" id="health-progress-fill"></span></div>
+      <span class="health-progress__label" id="health-progress-label">Проверка станций…</span>
+    </div>
+  </header>
+
+  <main class="app-container" id="main">
+    <!-- Плеер -->
+    <section class="card player-card" aria-labelledby="station-name">
+      <div class="player-top">
+        <div class="player-now">
+          <div class="player-art" id="player-art" aria-hidden="true">
+            <span class="player-art__emoji" id="player-art-emoji">📻</span>
+            <span class="player-art__pulse"></span>
+          </div>
+          <div class="player-info">
+            <p class="eyebrow">Сейчас играет</p>
+            <h1 class="station-name" id="station-name">Выберите станцию</h1>
+            <p class="station-genre" id="station-genre">Список станций — ниже</p>
+            <div class="chips">
+              <span class="chip" id="station-bitrate-chip">— kbps</span>
+              <span class="chip" id="station-source-chip">источник: —</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="player-controls" role="group" aria-label="Управление воспроизведением">
+          <button class="icon-btn icon-btn--lg" type="button" id="prev-btn" data-command="playback:prev" aria-label="Предыдущая станция" title="Предыдущая (←)">
+            <span aria-hidden="true">⏮</span>
+          </button>
+          <button class="btn-play" type="button" id="play-pause-btn" data-command="playback:toggle" aria-label="Воспроизвести" title="Воспроизвести / пауза (Space)">
+            <span id="play-pause-icon" aria-hidden="true">▶</span>
+          </button>
+          <button class="icon-btn icon-btn--lg" type="button" id="stop-btn" data-command="playback:stop" aria-label="Остановить" title="Остановить">
+            <span aria-hidden="true">⏹</span>
+          </button>
+          <button class="icon-btn icon-btn--lg" type="button" id="next-btn" data-command="playback:next" aria-label="Следующая станция" title="Следующая (→)">
+            <span aria-hidden="true">⏭</span>
+          </button>
+        </div>
+
+        <div class="volume-control">
+          <button class="icon-btn" type="button" id="mute-btn" data-command="playback:mute" aria-label="Выключить звук" aria-pressed="false" title="Звук">
+            <span id="mute-icon" aria-hidden="true">🔊</span>
+          </button>
+          <label class="sr-only" for="volume">Громкость</label>
+          <input type="range" id="volume" class="range" min="0" max="100" value="80" aria-valuetext="80%" />
+          <span class="volume-value" id="volume-value">80%</span>
+        </div>
+      </div>
+
+      <div class="mini-visualizer" aria-hidden="true">
+        <canvas id="mini-canvas"></canvas>
+        <span class="mini-visualizer__hint" id="mini-hint">визуализация потока</span>
+      </div>
+    </section>
+
+    <div class="content-grid">
+      <div class="content-main">
+        <!-- Станции и эквалайзер -->
+        <section class="card views-card" aria-label="Станции и эквалайзер">
+          <div class="view-tabs" role="tablist" aria-label="Разделы радио">
+            <button class="view-tab" type="button" role="tab" id="tab-stations" aria-selected="true" aria-controls="panel-stations" data-command="view:stations">
+              📻 Все станции
+            </button>
+            <button class="view-tab" type="button" role="tab" id="tab-favorites" aria-selected="false" aria-controls="panel-favorites" data-command="view:favorites">
+              ★ Избранные
+            </button>
+            <button class="view-tab" type="button" role="tab" id="tab-equalizer" aria-selected="false" aria-controls="panel-equalizer" data-command="view:equalizer">
+              🎛 Эквалайзер
+            </button>
+          </div>
+
+          <div class="view-panel" id="panel-stations" role="tabpanel" aria-labelledby="tab-stations">
+            <div class="toolbar">
+              <div class="search">
+                <span class="search__icon" aria-hidden="true">⌕</span>
+                <label class="sr-only" for="stations-search">Поиск станций</label>
+                <input type="search" id="stations-search" placeholder="Поиск: название, жанр…" autocomplete="off" />
+              </div>
+              <button class="chip chip--action" type="button" id="filter-favorites" data-command="filter:favorites" aria-pressed="false">
+                ★ Только избранные
+              </button>
+              <button class="chip chip--active" type="button" id="group-filter-chip" data-command="group:clear-filter" hidden>
+                <span id="group-filter-name">Группа</span> <span aria-hidden="true">×</span>
+              </button>
+              <span class="toolbar__count" id="stations-count">0 станций</span>
+            </div>
+
+            <ul class="stations-list" id="stations-list" aria-label="Список радиостанций"></ul>
+            <div class="empty-state" id="stations-empty" hidden>
+              <p class="empty-state__title">Станции не найдены</p>
+              <p class="empty-state__text">Измените фильтр, очистите поиск или добавьте новую станцию.</p>
+              <button class="btn btn-outline btn-sm" type="button" data-command="station:add">➕ Добавить станцию</button>
+            </div>
+          </div>
+
+          <div class="view-panel" id="panel-favorites" role="tabpanel" aria-labelledby="tab-favorites" hidden>
+            <ul class="stations-list" id="favorites-list" aria-label="Избранные станции"></ul>
+            <div class="empty-state" id="favorites-empty" hidden>
+              <p class="empty-state__title">В избранном пока пусто</p>
+              <p class="empty-state__text">Нажмите ★ у любой станции — она появится здесь.</p>
+              <button class="btn btn-outline btn-sm" type="button" data-command="view:stations">Перейти к станциям</button>
+            </div>
+          </div>
+
+          <div class="view-panel" id="panel-equalizer" role="tabpanel" aria-labelledby="tab-equalizer" hidden>
+            <div class="eq-head">
+              <div>
+                <h2 class="section-title">10-полосный эквалайзер</h2>
+                <p class="section-subtitle">Настройте звучание или выберите готовый пресет.</p>
+              </div>
+              <button class="btn btn-outline btn-sm" type="button" data-command="eq:reset">Сбросить полосы</button>
+            </div>
+            <div class="eq-presets" id="eq-presets" role="group" aria-label="Пресеты эквалайзера"></div>
+            <div class="eq-controls" id="eq-controls"></div>
+            <p class="eq-hint" id="eq-hint">Эквалайзер работает, когда поток отдаёт CORS-заголовки. В режиме совместимости полосы недоступны.</p>
+          </div>
+        </section>
+
+        <!-- Группы -->
+        <section class="card groups-card" aria-labelledby="groups-title">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title" id="groups-title">Группы станций</h2>
+              <p class="section-subtitle">Объединяйте станции по настроению и включайте фильтр одним кликом.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" type="button" data-command="group:create">➕ Создать группу</button>
+          </div>
+          <div class="groups-list" id="groups-list"></div>
+          <div class="empty-state empty-state--compact" id="groups-empty" hidden>
+            <p class="empty-state__title">Групп ещё нет</p>
+            <p class="empty-state__text">Создайте группу «Для работы», «Вечер» или любую другую — и фильтруйте станции одним кликом.</p>
+          </div>
+        </section>
+
+        <!-- Сеть и источники -->
+        <section class="card info-card" aria-labelledby="info-title">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title" id="info-title">Источники и сеть</h2>
+              <p class="section-subtitle">Как приложение выбрало текущий поток.</p>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" id="recheck-btn" data-command="health:check">
+              <span class="btn__spinner" aria-hidden="true"></span>
+              <span id="recheck-label">Проверить сейчас</span>
+            </button>
+          </div>
+          <dl class="info-grid">
+            <div class="info-row">
+              <dt>Подключение</dt>
+              <dd id="info-connection">—</dd>
+            </div>
+            <div class="info-row">
+              <dt>Состояние сети</dt>
+              <dd id="info-connection-state">—</dd>
+            </div>
+            <div class="info-row">
+              <dt>Источник потока</dt>
+              <dd id="info-source" class="mono">—</dd>
+            </div>
+            <div class="info-row">
+              <dt>Битрейт станции</dt>
+              <dd id="info-bitrate">—</dd>
+            </div>
+            <div class="info-row">
+              <dt>Воспроизведение</dt>
+              <dd id="info-playback">—</dd>
+            </div>
+            <div class="info-row">
+              <dt>Проверка источников</dt>
+              <dd id="info-health">—</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+
+      <aside class="content-side">
+        <!-- Визуализация -->
+        <section class="card visualizer-card" aria-labelledby="viz-title">
+          <h2 class="section-title" id="viz-title">Визуализация</h2>
+          <p class="section-subtitle">Живой спектр текущего потока.</p>
+          <div class="segmented" role="group" aria-label="Режим фоновой визуализации">
+            <button class="segmented__btn" type="button" data-command="ui:mode" data-mode="spectrum" aria-pressed="true">Спектр</button>
+            <button class="segmented__btn" type="button" data-command="ui:mode" data-mode="aurora" aria-pressed="false">Аврора</button>
+            <button class="segmented__btn" type="button" data-command="ui:mode" data-mode="orbit" aria-pressed="false">Орбиты</button>
+          </div>
+          <button class="switch-row" type="button" id="bg-toggle" data-command="ui:toggle-bg" aria-pressed="true">
+            <span class="switch" aria-hidden="true"><span class="switch__knob"></span></span>
+            <span class="switch-row__text">Фоновая визуализация</span>
+          </button>
+          <p class="visualizer-hint" id="visualizer-hint">Реагирует на громкость и бас. Работает и на паузе — тихо и без лишней нагрузки.</p>
+        </section>
+
+        <!-- Быстрые действия -->
+        <section class="card quick-card" aria-labelledby="quick-title">
+          <h2 class="section-title" id="quick-title">Быстрые действия</h2>
+          <div class="quick-actions">
+            <button class="quick-action" type="button" data-command="station:add">
+              <span class="quick-action__ico" aria-hidden="true">➕</span>
+              <span class="quick-action__title">Станция</span>
+              <span class="quick-action__hint">Свой поток и резервы</span>
+            </button>
+            <button class="quick-action" type="button" data-command="group:create">
+              <span class="quick-action__ico" aria-hidden="true">🗂</span>
+              <span class="quick-action__title">Группа</span>
+              <span class="quick-action__hint">Набор станций</span>
+            </button>
+            <button class="quick-action" type="button" data-command="settings:open">
+              <span class="quick-action__ico" aria-hidden="true">⚙</span>
+              <span class="quick-action__title">Настройки</span>
+              <span class="quick-action__hint">Импорт и экспорт</span>
+            </button>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <span>MultiRadio · интернет-радио на Web Audio API</span>
+      <span id="uptime">Время работы: 00:00:00</span>
+    </div>
+  </footer>
+
+  <!-- ===================== Модальные окна ===================== -->
+
+  <!-- Станция: добавление и редактирование -->
+  <div class="modal" id="modal-station" role="dialog" aria-modal="true" aria-labelledby="station-modal-title" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__panel modal__panel--wide" role="document">
+      <header class="modal__header">
+        <div>
+          <h2 class="modal__title" id="station-modal-title">Добавить станцию</h2>
+          <p class="modal__subtitle" id="station-modal-subtitle">Основной поток и резервные источники.</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+      </header>
+      <form class="modal__body form" id="station-form" novalidate>
+        <div class="form-grid">
+          <div class="field field--span2">
+            <label class="field__label" for="st-name">Название <span class="field__req">*</span></label>
+            <input class="input" type="text" id="st-name" name="name" maxlength="60" autocomplete="off" placeholder="Например, Night Drive" />
+            <p class="field__error" data-error-for="name"></p>
+          </div>
+          <div class="field field--emoji">
+            <label class="field__label" for="st-emoji">Эмодзи</label>
+            <input class="input" type="text" id="st-emoji" name="emoji" maxlength="8" autocomplete="off" placeholder="📻" />
+            <p class="field__hint">Пара символов для карточки</p>
+          </div>
+          <div class="field">
+            <label class="field__label" for="st-genre">Жанр</label>
+            <input class="input" type="text" id="st-genre" name="genre" maxlength="60" autocomplete="off" placeholder="Ambient / Downtempo" />
+            <p class="field__error" data-error-for="genre"></p>
+          </div>
+          <div class="field">
+            <label class="field__label" for="st-bitrate">Битрейт</label>
+            <input class="input" type="text" id="st-bitrate" name="bitrate" maxlength="20" list="bitrate-options" autocomplete="off" placeholder="128 kbps" />
+            <datalist id="bitrate-options">
+              <option value="96 kbps"></option>
+              <option value="128 kbps"></option>
+              <option value="192 kbps"></option>
+              <option value="256 kbps"></option>
+              <option value="320 kbps"></option>
+            </datalist>
+            <p class="field__error" data-error-for="bitrate"></p>
+          </div>
+          <div class="field field--span2">
+            <label class="field__label" for="st-primary">Основной URL потока <span class="field__req">*</span></label>
+            <input class="input" type="url" id="st-primary" name="primary" inputmode="url" autocomplete="off" placeholder="https://example.com/stream.mp3" />
+            <p class="field__error" data-error-for="primary"></p>
+          </div>
+          <div class="field field--span2">
+            <label class="field__label" for="st-fallbacks">Резервные URL</label>
+            <textarea class="input input--area" id="st-fallbacks" name="fallbacks" rows="3" autocomplete="off" placeholder="По одному адресу в строке или через запятую"></textarea>
+            <p class="field__hint">Используются по очереди, если основной поток не отвечает.</p>
+            <p class="field__error" data-error-for="fallbacks"></p>
+          </div>
+          <div class="field">
+            <label class="field__label" for="st-group">Группа</label>
+            <select class="input" id="st-group" name="groupId">
+              <option value="">Без группы</option>
+            </select>
+            <p class="field__error" data-error-for="groupId"></p>
+            <p class="field__hint">Можно изменить позже.</p>
+          </div>
+        </div>
+        <p class="form__error" id="station-form-error" role="alert" hidden></p>
+        <div class="form__actions">
+          <button class="btn btn-danger btn-ghost" type="button" id="station-delete" hidden>Удалить станцию</button>
+          <span class="form__spacer"></span>
+          <button class="btn btn-ghost" type="button" data-close-modal>Отмена</button>
+          <button class="btn btn-primary" type="submit" id="station-submit">Добавить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Группа: создание и редактирование -->
+  <div class="modal" id="modal-group" role="dialog" aria-modal="true" aria-labelledby="group-modal-title" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__panel" role="document">
+      <header class="modal__header">
+        <div>
+          <h2 class="modal__title" id="group-modal-title">Создать группу</h2>
+          <p class="modal__subtitle" id="group-modal-subtitle">Название и станции, которые в неё войдут.</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+      </header>
+      <form class="modal__body form" id="group-form" novalidate>
+        <div class="field">
+          <label class="field__label" for="gr-name">Название группы <span class="field__req">*</span></label>
+          <input class="input" type="text" id="gr-name" name="name" maxlength="40" autocomplete="off" placeholder="Например, Для работы" />
+          <p class="field__error" data-error-for="name"></p>
+        </div>
+        <fieldset class="fieldset">
+          <legend class="field__label">Станции в группе</legend>
+          <div class="checklist" id="group-station-options"></div>
+          <p class="field__hint">Станция может находиться только в одной группе — при выборе здесь она будет перенесена.</p>
+        </fieldset>
+        <p class="form__error" id="group-form-error" role="alert" hidden></p>
+        <div class="form__actions">
+          <button class="btn btn-danger btn-ghost" type="button" id="group-delete" hidden>Удалить группу</button>
+          <span class="form__spacer"></span>
+          <button class="btn btn-ghost" type="button" data-close-modal>Отмена</button>
+          <button class="btn btn-primary" type="submit" id="group-submit">Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Настройки -->
+  <div class="modal" id="modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__panel modal__panel--wide" role="document">
+      <header class="modal__header">
+        <div>
+          <h2 class="modal__title" id="settings-modal-title">Настройки</h2>
+          <p class="modal__subtitle">Внешний вид, совместимость и данные.</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+      </header>
+      <div class="modal__body">
+        <section class="settings-section" aria-labelledby="settings-appearance">
+          <h3 class="settings-section__title" id="settings-appearance">Внешний вид</h3>
+          <label class="settings-row" for="setting-bg">
+            <span class="settings-row__text">
+              <span class="settings-row__title">Фоновая визуализация</span>
+              <span class="settings-row__hint">Анимированный спектр за интерфейсом.</span>
+            </span>
+            <span class="switch switch--inline" aria-hidden="true">
+              <input type="checkbox" id="setting-bg" />
+              <span class="switch__track"><span class="switch__knob"></span></span>
+            </span>
+          </label>
+          <label class="settings-row" for="setting-mode">
+            <span class="settings-row__text">
+              <span class="settings-row__title">Режим визуализации</span>
+              <span class="settings-row__hint">Круговой спектр, аврора или орбиты.</span>
+            </span>
+            <select class="input input--compact" id="setting-mode">
+              <option value="spectrum">Круговой спектр</option>
+              <option value="aurora">Аврора</option>
+              <option value="orbit">Орбиты</option>
+            </select>
+          </label>
+          <label class="settings-row" for="setting-compat">
+            <span class="settings-row__text">
+              <span class="settings-row__title">Режим совместимости</span>
+              <span class="settings-row__hint">Звук без Web Audio: помогает потокам без CORS, но отключает эквалайзер и спектр.</span>
+            </span>
+            <span class="switch switch--inline" aria-hidden="true">
+              <input type="checkbox" id="setting-compat" />
+              <span class="switch__track"><span class="switch__knob"></span></span>
+            </span>
+          </label>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-data">
+          <h3 class="settings-section__title" id="settings-data">Данные</h3>
+          <div class="settings-actions">
+            <button class="btn btn-outline" type="button" data-command="settings:export">📤 Экспорт</button>
+            <button class="btn btn-outline" type="button" data-command="settings:import">📥 Импорт</button>
+            <button class="btn btn-outline" type="button" data-command="settings:restore-stations">↺ Вернуть стандартные станции</button>
+            <button class="btn btn-danger btn-ghost" type="button" data-command="settings:reset">Сбросить всё</button>
+          </div>
+          <input type="file" id="import-file" accept="application/json,.json" hidden />
+          <p class="settings-hint">Экспортируются станции, группы, избранное, громкость, эквалайзер и настройки вида. Файл хранится локально и никуда не отправляется.</p>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-about">
+          <h3 class="settings-section__title" id="settings-about">О приложении</h3>
+          <dl class="settings-list">
+            <div><dt>Версия</dt><dd id="settings-version">2.0.0</dd></div>
+            <div><dt>Локальное хранилище</dt><dd id="settings-storage">—</dd></div>
+            <div><dt>Технологии</dt><dd>HTML, CSS, Web Audio API, Canvas 2D</dd></div>
+          </dl>
+          <p class="settings-hint">Данные сохраняются в localStorage браузера. Приложение работает без сервера: откройте index.html напрямую.</p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Подтверждение -->
+  <div class="modal" id="modal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__panel modal__panel--sm" role="document">
+      <header class="modal__header">
+        <h2 class="modal__title" id="confirm-title">Подтвердите действие</h2>
+      </header>
+      <div class="modal__body">
+        <p class="confirm-message" id="confirm-message"></p>
+      </div>
+      <footer class="modal__footer">
+        <button class="btn btn-ghost" type="button" id="confirm-cancel">Отмена</button>
+        <button class="btn btn-danger" type="button" id="confirm-ok">Удалить</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="toast-region" id="toast-region" role="status" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Ядро -->
+  <script src="js/core/utils.js"></script>
+  <script src="js/config/app.js"></script>
+  <script src="js/config/stations.js"></script>
+  <script src="js/config/equalizer.js"></script>
+  <script src="js/core/storage.js"></script>
+  <script src="js/core/state.js"></script>
+  <script src="js/core/dom.js"></script>
+  <!-- Сервисы -->
+  <script src="js/services/analyser.js"></script>
+  <script src="js/services/audio.js"></script>
+  <script src="js/services/network.js"></script>
+  <script src="js/services/health.js"></script>
+  <!-- Интерфейс -->
+  <script src="js/ui/toast.js"></script>
+  <script src="js/ui/modal.js"></script>
+  <script src="js/ui/commands.js"></script>
+  <script src="js/ui/views.js"></script>
+  <script src="js/ui/nav.js"></script>
+  <script src="js/ui/header.js"></script>
+  <script src="js/ui/player.js"></script>
+  <script src="js/ui/stations.js"></script>
+  <script src="js/ui/groups.js"></script>
+  <script src="js/ui/equalizer.js"></script>
+  <script src="js/ui/station-form.js"></script>
+  <script src="js/ui/settings.js"></script>
+  <script src="js/ui/info.js"></script>
+  <!-- Визуализация -->
+  <script src="js/visualizer/mini.js"></script>
+  <script src="js/visualizer/background.js"></script>
+  <script src="js/visualizer/index.js"></script>
+  <!-- Запуск -->
+  <script src="js/main.js"></script>
+</body>
+</html>
