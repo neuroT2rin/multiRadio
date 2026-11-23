@@ -112,9 +112,9 @@ tests/  store.test.js · browser-smoke.js
 
 ```
 utils → config/app → config/stations → config/equalizer → storage → state → dom
-→ analyser → audio → network → health
+→ analyser → audio → network → health → stats
 → toast → modal → commands → views → nav → header → player → stations → groups
-→ equalizer → station-form → settings → info → sleep-timer → voice-search
+→ equalizer → station-form → settings → info → stats → sleep-timer → voice-search
 → visualizer/mini → visualizer/background → visualizer/index → main
 ```
 
@@ -139,6 +139,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/services/audio.js` | `<audio>` + Web Audio, фолбэки, compat-режим, громкость, EQ | `init`, `dispose`, `playStation`, `toggle`, `pause`, `stop`, `next`, `prev`, `isCompat`, `isGraphReady`, `getSourceLabel` |
 | `js/services/network.js` | online/offline, `navigator.connection`, контрольные запросы | `init`, `check`, `dispose` |
 | `js/services/health.js` | Проверка URL через `Audio(preload=metadata)`, пул, прогресс | `init`, `run({manual})`, `dispose`, `isRunning` |
+| `js/services/stats.js` | Статистика прослушивания (секунды по станциям/жанрам) | `init`, `getSummary`, `reset`, `dispose` |
 | `js/ui/commands.js` | Шина `data-command` → обработчик | `init`, `register`, `registerMany`, `run`, `has` |
 | `js/ui/toast.js` | Тосты; слушает `notice` | `init`, `show`, `success`, `error`, `warning`, `info` |
 | `js/ui/modal.js` | Модалки, focus trap, `confirm()` | `init`, `open`, `close`, `closeAll`, `confirm`, `isOpen`, `hasOpen` |
@@ -154,6 +155,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
 | `js/ui/sleep-timer.js` | Таймер сна в шапке: отсчёт и остановка радио | `init`, `start(minutes)`, `cancel`, `dispose`, `remainingMs` |
 | `js/ui/voice-search.js` | Голосовой подбор станции (Web Speech API + локальный матчер) | `init`, `start`, `stop`, `match(text)`, `supported`, `dispose` |
+| `js/ui/stats.js` | Панель статистики: станции и жанры | `init`, `render` |
 | `js/visualizer/mini.js` | Визуализация потока в плеере (3 режима) | `init`, `draw(analysis)`, `drawIdle`, `setMode`, `mode`, `resize`, `dispose` |
 | `js/visualizer/background.js` | Полноэкранный canvas, режимы | `init`, `draw(analysis, dt, now)`, `resize`, `setMode`, `mode` |
 | `js/visualizer/index.js` | Единственный rAF-цикл, синхронизация UI и режим визуализации | `init`, `dispose`, `setVizMode(bool)`, `isVizMode()` |
@@ -276,6 +278,10 @@ payload**. Обработчик обязан делать `payload = payload || 
 `stationGroups` (маппинг → membership), `stations`.
 Сохранение — debounce 300 мс; `saveNow()` — немедленно.
 
+Статистика прослушивания хранится отдельным ключом `multiradio:stats:v1`:
+`{ totalSeconds, stations: { id: { seconds, lastAt } }, genres: { name: seconds } }`.
+В экспорт/импорт настроек она не входит; сбрасывается командой `stats:reset`.
+
 ---
 
 ## 6. Команды (шина действий)
@@ -295,6 +301,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 | `health:check` | `ui/info.js` |
 | `timer:start`, `timer:cancel` | `ui/sleep-timer.js` |
 | `search:voice` | `ui/voice-search.js` |
+| `stats:reset` | `ui/stats.js` |
 | `settings:open`, `settings:export`, `settings:import`, `settings:reset`, `settings:restore-stations` | `ui/settings.js` |
 | `ui:toggle-bg`, `ui:mode`, `ui:mini-mode`, `ui:viz-mode` | `visualizer/index.js` |
 
@@ -520,6 +527,7 @@ VPN точно определить нельзя — не обещать это�
 | Режим визуализации (шапка) | `visualizer/index.js`, `index.html` (header), `css/layout.css` | те же | клик туда/обратно, `Esc`, скрытие панелей |
 | Таймер сна | `ui/sleep-timer.js`, меню в шапке | `sleep-timer.js`, `index.html`, `main.js` | запуск/отмена, отсчёт, остановка |
 | Голосовой подбор станции | `ui/voice-search.js`, `index.html` (toolbar) | те же | `MR.voiceSearch.match()`, микрофон, fallback |
+| Статистика прослушивания | `services/stats.js`, `ui/stats.js` | те же + `index.html` (сайдбар) | включить радио, подождать, панель |
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |

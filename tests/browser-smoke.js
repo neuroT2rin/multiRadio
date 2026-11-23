@@ -437,6 +437,14 @@ async function main() {
   );
   await evaluate(`MR.audio.stop()`);
 
+  results.stats = await evaluate(`(() => {
+    const summary = MR.stats.getSummary();
+    return {
+      totalSeconds: Number(summary.totalSeconds.toFixed(2)),
+      stations: summary.stations.length,
+    };
+  })()`);
+
   // Мобильный вид
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: 390, height: 844, deviceScaleFactor: 2, mobile: true,

@@ -371,6 +371,27 @@
             <p class="empty-state__text">Создайте группу «Для работы», «Вечер» или любую другую — и фильтруйте станции одним кликом.</p>
           </div>
         </section>
+
+        <!-- Статистика прослушивания -->
+        <section class="card stats-card" aria-labelledby="stats-title">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title" id="stats-title">Статистика</h2>
+              <p class="section-subtitle">Время прослушивания по станциям и жанрам.</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" data-command="stats:reset">Сбросить</button>
+          </div>
+          <p class="stats-total" id="stats-total">Пока нет данных</p>
+          <div class="stats-block">
+            <p class="stats-block__title">Станции</p>
+            <ul class="stats-list" id="stats-stations"></ul>
+          </div>
+          <div class="stats-block">
+            <p class="stats-block__title">Жанры</p>
+            <ul class="stats-list" id="stats-genres"></ul>
+          </div>
+          <p class="stats-empty" id="stats-empty" hidden>Пока нет данных — включите радио.</p>
+        </section>
       </aside>
     </div>
   </main>
@@ -594,6 +615,7 @@
   <script src="js/services/audio.js"></script>
   <script src="js/services/network.js"></script>
   <script src="js/services/health.js"></script>
+  <script src="js/services/stats.js"></script>
   <!-- Интерфейс -->
   <script src="js/ui/toast.js"></script>
   <script src="js/ui/modal.js"></script>
@@ -608,6 +630,7 @@
   <script src="js/ui/station-form.js"></script>
   <script src="js/ui/settings.js"></script>
   <script src="js/ui/info.js"></script>
+  <script src="js/ui/stats.js"></script>
   <script src="js/ui/sleep-timer.js"></script>
   <script src="js/ui/voice-search.js"></script>
   <!-- Визуализация -->

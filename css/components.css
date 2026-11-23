@@ -918,6 +918,81 @@ body.modal-open {
 }
 
 /* --------------------------------------------------------------------------
+   Статистика прослушивания
+   -------------------------------------------------------------------------- */
+
+.stats-total {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-block {
+  margin-top: 14px;
+}
+
+.stats-block__title {
+  margin-bottom: 7px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.stats-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 0.78rem;
+}
+
+.stats-row__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-row__value {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-bar {
+  flex: 1 0 100%;
+  height: 4px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-pill);
+}
+
+.stats-bar__fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-3), var(--accent-2));
+  border-radius: inherit;
+}
+
+.stats-empty {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+/* --------------------------------------------------------------------------
    Информация о сети
    -------------------------------------------------------------------------- */
 

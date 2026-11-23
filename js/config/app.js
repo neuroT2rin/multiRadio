@@ -10,6 +10,7 @@
   MR.config = {
     version: "2.2.0",
     storageKey: "multiradio:state:v2",
+    statsKey: "multiradio:stats:v1",
 
     views: ["stations", "favorites", "equalizer"],
     stationViews: ["list", "grid"],

@@ -39,6 +39,7 @@
     MR.audio.dispose();
     MR.health.dispose();
     MR.network.dispose();
+    MR.stats.dispose();
     MR.sleepTimer.dispose();
     MR.voiceSearch.dispose();
     MR.visualizer.dispose();
@@ -56,6 +57,7 @@
     // 2. Аудио и сеть.
     MR.audio.init();
     MR.network.init();
+    MR.stats.init();
 
     // 3. Интерфейс: сначала шина команд и разделы, затем всё остальное.
     MR.views.init();
@@ -68,6 +70,7 @@
     MR.stationForm.init();
     MR.settingsUI.init();
     MR.infoUI.init();
+    MR.statsUI.init();
     MR.sleepTimer.init();
     MR.voiceSearch.init();
     MR.visualizer.init();
