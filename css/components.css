@@ -819,6 +819,46 @@ body.modal-open {
   gap: 8px;
 }
 
+.group-card__toggle {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 0;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+}
+
+.group-card__toggle:hover {
+  color: var(--accent);
+}
+
+.group-card__toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.group-card__chev {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  transition: transform 0.18s var(--ease), color 0.18s;
+}
+
+.group-card.is-expanded .group-card__chev {
+  color: var(--accent);
+  transform: rotate(90deg);
+}
+
+.group-card__stations[hidden],
+.group-card__empty[hidden] {
+  display: none;
+}
+
 .group-card__name {
   overflow: hidden;
   font-size: 0.89rem;

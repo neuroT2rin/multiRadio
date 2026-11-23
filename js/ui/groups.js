@@ -26,6 +26,8 @@
   let subtitle = null;
   let errorBox = null;
   let editingId = null;
+  /** id группы, у которой раскрыт список станций (не более одной). */
+  let expandedGroupId = null;
 
   /* ------------------------------------------------------------------------
      Модальное окно
@@ -200,20 +202,42 @@
       }, "🗑")
     );
 
-    const head = dom.el("div", { class: "group-card__head" },
+    const isExpanded = expandedGroupId === group.id;
+    const bodyId = "group-body-" + group.id;
+
+    const toggle = dom.el("button", {
+      class: "group-card__toggle",
+      type: "button",
+      "data-command": "group:toggle",
+      "data-group-id": group.id,
+      "aria-expanded": String(isExpanded),
+      "aria-controls": bodyId,
+      title: isExpanded ? "Скрыть станции группы" : "Показать станции группы",
+    },
+      dom.el("span", { class: "group-card__chev", "aria-hidden": "true" }, "▸"),
       dom.el("span", { class: "group-card__name", text: group.name }),
       dom.el("span", {
         class: "group-card__count",
         text: stations.length + " " + utils.pluralRu(stations.length, "station"),
-      }),
-      actions
+      })
     );
+
+    const head = dom.el("div", { class: "group-card__head" }, toggle, actions);
 
     let body;
     if (stations.length === 0) {
-      body = dom.el("p", { class: "group-card__empty", text: "Пока пусто — добавьте станции." });
+      body = dom.el("p", {
+        class: "group-card__empty",
+        id: bodyId,
+        hidden: !isExpanded,
+        text: "Пока пусто — добавьте станции.",
+      });
     } else {
-      body = dom.el("div", { class: "group-card__stations" },
+      body = dom.el("div", {
+        class: "group-card__stations",
+        id: bodyId,
+        hidden: !isExpanded,
+      },
         stations.map(function (station) {
           return dom.el("span", { class: "group-station" },
             dom.el("span", { text: station.emoji + " " + station.name }),
@@ -232,13 +256,17 @@
     }
 
     return dom.el("article", {
-      class: "group-card" + (isFiltered ? " is-filtered" : ""),
+      class: "group-card" + (isFiltered ? " is-filtered" : "") + (isExpanded ? " is-expanded" : ""),
       "data-group-id": group.id,
     }, head, body);
   }
 
   function render() {
     if (!container) return;
+
+    if (expandedGroupId && !store.getGroup(expandedGroupId)) {
+      expandedGroupId = null;
+    }
 
     container.innerHTML = "";
 
@@ -307,6 +335,13 @@
       "group:filter": function (payload) {
         const groupId = payload && payload.dataset ? payload.dataset.groupId : "";
         if (groupId) toggleGroupFilter(groupId);
+      },
+      "group:toggle": function (payload) {
+        const groupId = payload && payload.dataset ? payload.dataset.groupId : "";
+        if (!groupId || !store.getGroup(groupId)) return;
+        // Одновременно раскрыта не более чем одна группа.
+        expandedGroupId = expandedGroupId === groupId ? null : groupId;
+        render();
       },
       "group:clear-filter": function () {
         store.setFilters({ groupId: null });

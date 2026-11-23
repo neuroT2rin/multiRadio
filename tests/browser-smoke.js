@@ -178,8 +178,18 @@ async function main() {
     modalClosed: document.querySelector('#modal-group').hidden,
     cards: document.querySelectorAll('#groups-list .group-card').length,
     name: document.querySelector('.group-card__name')?.textContent || '',
-    chips: document.querySelectorAll('.group-station').length,
+    collapsedChips: document.querySelectorAll('.group-station').length,
+    ariaExpanded: document.querySelector('.group-card__toggle').getAttribute('aria-expanded'),
     toasts: document.querySelectorAll('.toast--success').length,
+  }))()`);
+
+  // Аккордеон: по умолчанию станции скрыты, раскрываются кликом по группе.
+  await evaluate(`document.querySelector('.group-card__toggle').click()`);
+  await sleep(150);
+  results.groupExpanded = await evaluate(`(() => ({
+    chips: document.querySelectorAll('.group-station').length,
+    expanded: document.querySelector('.group-card').classList.contains('is-expanded'),
+    ariaExpanded: document.querySelector('.group-card__toggle').getAttribute('aria-expanded'),
   }))()`);
 
   // Фильтр группы

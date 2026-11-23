@@ -147,7 +147,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/header.js` | Бейджи сети/плеера, прогресс проверки, `document.title` | `init` |
 | `js/ui/player.js` | Карточка «сейчас играет», управление, громкость, `Space` | `init`, `render` |
 | `js/ui/stations.js` | Списки станций/избранного, поиск, фильтры, точки здоровья | `init`, `render` |
-| `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы | `init`, `render`, `openEditor(groupId)` |
+| `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой) | `init`, `render`, `openEditor(groupId)` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
 | `js/ui/settings.js` | Настройки вида, compat, export/import/reset | `init`, `open` |
@@ -286,7 +286,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 | `view:stations`, `view:favorites`, `view:equalizer` | `ui/views.js` |
 | `station:add` | `ui/station-form.js` |
 | `station:edit`, `station:play`, `station:favorite`, `filter:favorites` | `ui/stations.js` |
-| `group:create`, `group:edit`, `group:delete`, `group:filter`, `group:clear-filter`, `group:remove-station` | `ui/groups.js` |
+| `group:create`, `group:edit`, `group:delete`, `group:filter`, `group:clear-filter`, `group:remove-station`, `group:toggle` | `ui/groups.js` |
 | `playback:toggle`, `playback:stop`, `playback:next`, `playback:prev`, `playback:mute` | `ui/player.js` |
 | `eq:reset` | `ui/equalizer.js` |
 | `health:check` | `ui/info.js` |
@@ -380,7 +380,7 @@ document.querySelector("#stations-list").appendChild(row);
 | Кнопки | `.btn`, `.btn-primary`, `.btn-outline`, `.btn-ghost`, `.btn-danger`, `.btn-sm`, `.icon-btn`, `.icon-btn--sm` |
 | Станции | `.view-tabs`, `.view-tab`, `.toolbar`, `.stations-list`, `.station-row`, `.is-active`, `.station-row__main/__body/__name/__meta/__actions`, `.health-dot[data-health=online|fallback|offline|checking|unknown]` |
 | EQ | `.eq-controls`, `.eq-band`, `.eq-band__slider`, `.eq-meter__fill`, `.eq-preset[aria-pressed]` |
-| Группы | `.group-card`, `.is-filtered`, `.group-card__head/__stations/__actions`, `.group-station` |
+| Группы | `.group-card`, `.is-filtered`, `.is-expanded`, `.group-card__head/__toggle/__chev/__stations/__actions`, `.group-station` |
 | Модалки | `.modal`, `.modal__backdrop/__panel/__header/__body/__footer` |
 | Формы | `.form`, `.form-grid`, `.field`, `.field--span2`, `.field__error`, `.input`, `.checklist`, `.check-item` |
 | Тосты | `.toast-region`, `.toast--success|error|warning|info` |
