@@ -429,6 +429,9 @@ document.querySelector("#stations-list").appendChild(row);
 - `MR.bg` режимы: `spectrum` (круговой спектр), `aurora` (волны), `orbit` (орбиты).
   Круговой спектр центрируется по экрану (`cy = height * 0.5`), орбиты — чуть
   выше центра (`0.46`), чтобы кольца не упирались в подвал.
+  В `orbit` центральное ядро пульсирует: `coreRadius` зависит от `level`,
+  `bass`, `beat` и `treble`, вокруг рисуется двойной ореол и энергетическое
+  кольцо. Не делай ядро статичным — это главный акцент режима.
   Добавление режима: `config/app.js` → ветка в `background.js::draw` →
   кнопка `data-command="ui:mode" data-mode="..."` в меню «Вид» → `visualizer/index.js`
   и `ui/nav.js` синхронизируют `aria-checked` автоматически.

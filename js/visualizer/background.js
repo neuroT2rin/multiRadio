@@ -319,6 +319,8 @@
     const cy = height * 0.46;
     const base = Math.min(width, height);
     const level = idle ? 0 : utils.clamp(analysis.level, 0, 1);
+    const bass = idle ? 0 : utils.clamp(analysis.bass, 0, 1);
+    const treble = idle ? 0 : utils.clamp(analysis.treble, 0, 1);
 
     // Звёзды.
     stars.forEach(function (star) {
@@ -329,7 +331,24 @@
       ctx.fill();
     });
 
-    drawCoreGlow(cx, cy, base * 0.06, hue, energy);
+    // Ядро «дышит» под музыку: радиус, яркость и ореол зависят от уровня,
+    // баса и удара, а не стоят на месте.
+    const coreRadius = base * (
+      0.045 + level * 0.085 + bass * 0.035 + beatFlash * 0.03 + treble * 0.012
+    );
+    const glowRadius = coreRadius * (1.1 + energy * 0.55);
+
+    drawCoreGlow(cx, cy, glowRadius, hue, energy);
+
+    // Двойной ореол вокруг ядра.
+    const halo = ctx.createRadialGradient(cx, cy, coreRadius * 0.35, cx, cy, coreRadius * 2.6);
+    halo.addColorStop(0, hsla(hue + 10, 95, 68, 0.16 + energy * 0.18));
+    halo.addColorStop(0.5, hsla(hue + 26, 92, 60, 0.06 + energy * 0.08));
+    halo.addColorStop(1, hsla(hue + 40, 90, 55, 0));
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreRadius * 2.6, 0, Math.PI * 2);
+    ctx.fill();
 
     // Эллиптические орбиты.
     for (let i = 0; i < 3; i += 1) {
@@ -341,13 +360,21 @@
       ctx.stroke();
     }
 
-    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, base * 0.055);
-    core.addColorStop(0, hsla(hue, 95, 72, 0.7));
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius);
+    core.addColorStop(0, hsla(hue, 95, 78, Math.min(1, 0.72 + energy * 0.26)));
+    core.addColorStop(0.55, hsla(hue + 14, 92, 64, 0.22 + energy * 0.2));
     core.addColorStop(1, hsla(hue + 20, 90, 55, 0));
     ctx.fillStyle = core;
     ctx.beginPath();
-    ctx.arc(cx, cy, base * 0.055, 0, Math.PI * 2);
+    ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
     ctx.fill();
+
+    // Энергетическое кольцо — видимая амплитуда реакции на громкость.
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreRadius * (1.3 + level * 0.5), 0, Math.PI * 2);
+    ctx.strokeStyle = hsla(hue + 30, 95, 70, 0.1 + energy * 0.22);
+    ctx.lineWidth = 0.8 + level * 1.8;
+    ctx.stroke();
 
     // Планеты со шлейфами.
     ctx.save();
