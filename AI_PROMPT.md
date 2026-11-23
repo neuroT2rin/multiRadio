@@ -5,7 +5,7 @@
 > DOM/CSS-контракт, подводные камни и маршруты «задача → файлы».
 > Открывай код только по маршруту из §11 и только нужные файлы.
 >
-> Версия проекта: **2.0.0** · обновлено: 2025-11-22
+> Версия проекта: **2.1.0** · обновлено: 2026-11-23
 > Если этот файл расходится с кодом — прав код; обнови файл.
 
 ---
@@ -52,7 +52,8 @@ MultiRadio — одностраничное интернет-радио **без
 - 10-полосный эквалайзер (Web Audio `BiquadFilterNode`), 7 пресетов.
 - Группы станций и избранное, поиск и фильтры.
 - Проверка станций на откликаемость каждые 90 с + вручную, прогресс в шапке.
-- Визуализация: мини-спектр в плеере и полноэкранный Canvas (3 режима).
+- Визуализация: плавная волна потока в плеере и полноэкранный Canvas
+  (3 режима), включаемый кнопкой «Визуализация» в шапке.
 - Всё состояние — `localStorage`, экспорт/импорт JSON, миграция v1.
 - Язык интерфейса — русский. Код и API — английские имена.
 
@@ -151,15 +152,15 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
 | `js/ui/settings.js` | Настройки вида, compat, export/import/reset | `init`, `open` |
 | `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
-| `js/visualizer/mini.js` | Мини-спектр в плеере | `init`, `draw(analysis)`, `drawIdle`, `resize`, `dispose` |
+| `js/visualizer/mini.js` | Плавная волна потока в плеере | `init`, `draw(analysis)`, `drawIdle`, `resize`, `dispose` |
 | `js/visualizer/background.js` | Полноэкранный canvas, режимы | `init`, `draw(analysis, dt, now)`, `resize`, `setMode`, `mode` |
-| `js/visualizer/index.js` | Единственный rAF-цикл, синхронизация UI визуализации | `init`, `dispose` |
+| `js/visualizer/index.js` | Единственный rAF-цикл, синхронизация UI и режим визуализации | `init`, `dispose`, `setVizMode(bool)`, `isVizMode()` |
 | `js/main.js` | Инициализация, uptime, cleanup | — |
 | `css/base.css` | Сброс, токены, типографика, утилиты | `:root` переменные, `.sr-only`, `.skip-link` |
 | `css/layout.css` | Шапка, меню, прогресс, сетка, футер, адаптив | `.app-header`, `.main-nav`, `.health-progress`, `.app-container` |
 | `css/components.css` | Кнопки, бейджи, формы, модалки, тосты, группы, настройки | `.btn`, `.badge`, `.modal`, `.toast`, `.group-card` |
 | `css/player.css` | Плеер, вкладки, станции, EQ, мини-визуализатор | `.player-card`, `.station-row`, `.eq-band` |
-| `css/visualizer.css` | Фоновая визуализация | `.bg-visualizer` |
+| `css/visualizer.css` | Фоновая визуализация и режим визуализации | `.bg-visualizer`, `body.is-viz-mode` |
 
 ---
 
@@ -285,7 +286,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 | `eq:reset` | `ui/equalizer.js` |
 | `health:check` | `ui/info.js` |
 | `settings:open`, `settings:export`, `settings:import`, `settings:reset`, `settings:restore-stations` | `ui/settings.js` |
-| `ui:toggle-bg`, `ui:mode` | `visualizer/index.js` |
+| `ui:toggle-bg`, `ui:mode`, `ui:viz-mode` | `visualizer/index.js` |
 
 Новую команду регистрировать **до** первого клика (в `init()`), иначе
 `commands.run` напишет warning.
@@ -326,8 +327,9 @@ document.querySelector("#stations-list").appendChild(row);
 Разметка — `index.html` (≈580 строк). Часто используемые id:
 
 ```text
-Шапка:    app-header, main-nav, nav-toggle, network-badge, network-badge-text,
-          stream-status, health-progress, health-progress-fill, health-progress-label
+Шапка:    app-header, main-nav, nav-toggle, viz-toggle, network-badge,
+          network-badge-text, stream-status, health-progress,
+          health-progress-fill, health-progress-label
 Плеер:    station-name, station-genre, station-bitrate-chip, station-source-chip,
           player-art-emoji, play-pause-btn, play-pause-icon, stop-btn, prev-btn,
           next-btn, volume, volume-value, mute-btn, mute-icon, mini-canvas, mini-hint
@@ -346,12 +348,16 @@ document.querySelector("#stations-list").appendChild(row);
           settings-version, settings-storage
 Прочее:   modal-confirm, confirm-title, confirm-message, confirm-ok, confirm-cancel,
           info-connection, info-connection-state, info-source, info-bitrate,
-          info-playback, info-health, recheck-btn, recheck-label, bg-toggle,
-          bg-visualizer, bg-canvas, visualizer-hint, uptime, toast-region
+          info-playback, info-health, recheck-btn, recheck-label,
+          bg-visualizer, bg-canvas, uptime, toast-region
 ```
 
 Полный список: `grep 'id="' index.html`. ID — контракт: если переименовываешь,
 ищи `grep '#id' js/`.
+
+**Раскладка:** `.content-main` — «Станции/Избранные/Эквалайзер» и «Источники и
+сеть»; `.content-side` — «Быстрые действия», под ним «Группы станций».
+Отдельной панели визуализации нет: режимы и фон — в меню «Вид» и в настройках.
 
 **Состояния бейджей:** `[data-state]` на `.badge`: `pending|online|restricted|offline`
 (сеть), `idle|connecting|buffering|playing|paused|error|blocked` (плеер).
@@ -370,7 +376,7 @@ document.querySelector("#stations-list").appendChild(row);
 | Модалки | `.modal`, `.modal__backdrop/__panel/__header/__body/__footer` |
 | Формы | `.form`, `.form-grid`, `.field`, `.field--span2`, `.field__error`, `.input`, `.checklist`, `.check-item` |
 | Тосты | `.toast-region`, `.toast--success|error|warning|info` |
-| Визуализация | `.bg-visualizer.is-hidden`, `.mini-visualizer`, `.segmented__btn[aria-pressed]` |
+| Визуализация | `.bg-visualizer.is-hidden`, `.mini-visualizer`, `body.is-viz-mode`, `.nav-group--view`, `.viz-btn[aria-pressed]` |
 
 **CSS-файлы:** базовые токены (`--bg-0`, `--surface`, `--accent`, `--danger`,
 `--radius-*`, `--header-height`) — только `base.css`. Не хардкодить цвета в
@@ -419,16 +425,25 @@ document.querySelector("#stations-list").appendChild(row);
   ```
 - `visualizer/index.js::frame` раздаёт данные: `mini.draw(analysis)`,
   `eqUI.tick(analysis)` (~20 Гц), `bg.draw(analysis, dt, now)` (30 fps при игре,
-  ~9 fps в паузе). Не создавай второй rAF.
+  ~16 fps в режиме визуализации без звука, ~9 fps в паузе). Не создавай второй rAF.
 - `MR.bg` режимы: `spectrum` (круговой спектр), `aurora` (волны), `orbit` (орбиты).
   Добавление режима: `config/app.js` → ветка в `background.js::draw` →
-  кнопки `data-command="ui:mode" data-mode="..."` в HTML → `visualizer/index.js`
-  синхронизирует `aria-pressed` автоматически.
+  кнопка `data-command="ui:mode" data-mode="..."` в меню «Вид» → `visualizer/index.js`
+  и `ui/nav.js` синхронизируют `aria-checked` автоматически.
+- **Режим визуализации** — `#viz-toggle` в шапке (команда `ui:viz-mode`):
+  ставит `body.is-viz-mode`, скрывает всё, кроме группы «Вид» и самой кнопки,
+  разворачивает фон на весь экран и не трогает сохранённый `ui.bgEnabled`.
+  Повторный клик, `Esc` или `V` (в русской раскладке — `М`) возвращают страницу
+  и прежнюю позицию скролла.
+- `MR.mini` — плавная зеркальная волна: 72 опорные точки, косинусная выборка
+  спектра, Catmull-Rom сглаживание и экспоненциальное сглаживание по времени
+  (`ATTACK`/`RELEASE`). Столбиков больше нет — не возвращай их.
 - Canvas: DPR ≤2, `setTransform` после изменения размеров, `canvas.width`
   меняется только при реальном resize (иначе каждый кадр очищает canvas).
 - `prefers-reduced-motion` → статичный кадр, без цикла.
-- `analysis.silent` = играет, но данных нет (обычно CORS) — показывается подсказка.
-- `ui.bgEnabled=false` → `.bg-visualizer.is-hidden`, фон не рисуется.
+- `analysis.silent` = играет, но данных нет (обычно CORS) — подсказка `#mini-hint`.
+- `ui.bgEnabled=false` → `.bg-visualizer.is-hidden`, фон не рисуется (кроме
+  режима визуализации: там фон показывается принудительно).
 
 ---
 
@@ -467,6 +482,7 @@ VPN точно определить нельзя — не обещать это�
 | Фолбэки, CORS, compat | `services/audio.js` | `audio.js` (+ `ui/settings.js`, если настройка) | аудио-тест/локальный WAV |
 | Эквалайзер, пресеты, полосы | `config/equalizer.js`, `ui/equalizer.js`, `audio.js::applyEq` | те же | 10 полос, пресет, метры |
 | Визуализатор, режимы, canvas | `visualizer/*`, `analyser.js` | те же + `visualizer.css` | скриншот, `level>0`, нет ошибок |
+| Режим визуализации (шапка) | `visualizer/index.js`, `index.html` (header), `css/layout.css` | те же | клик туда/обратно, `Esc`, скрытие панелей |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
 | Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings` | экспорт→импорт, v1-файл |
@@ -498,8 +514,8 @@ VPN точно определить нельзя — не обещать это�
 ### C. Добавить режим визуализации
 1. `config/app.js`: имя в `visualizerModes`.
 2. `background.js`: функция `drawMyMode(...)` + ветка в `draw()`.
-3. `index.html`: кнопка в блоке «Визуализация» (`data-command="ui:mode"`)
-   и в меню «Вид».
+3. `index.html`: кнопка в меню «Вид» (`data-command="ui:mode"`); отдельной
+   панели визуализации в сайдбаре нет.
 4. `visualizer/index.js`: ничего, если режим берётся из `store.state.ui.mode`.
 5. Проверить DPR/resize/reduced-motion.
 
@@ -589,7 +605,8 @@ chrome --headless=new --no-sandbox --disable-gpu \
 node tests/browser-smoke.js "file:///.../index.html" "<ws-endpoint>" tests/screenshots
 ```
 Проверяет: загрузку, меню, группу, фильтр, валидацию/добавление станции,
-EQ, настройки, мобильный drawer, реальный звук через WAV data-URL,
+EQ, фон (переключатель в меню «Вид»), режим визуализации туда/обратно,
+настройки, мобильный drawer, реальный звук через WAV data-URL,
 уровень анализатора, отрисовку canvas, `console.error`/исключения.
 Ожидается `consoleErrors: []`, `exceptions: []`, `localPlayback.state: "playing"`.
 
@@ -600,6 +617,7 @@ EQ, настройки, мобильный drawer, реальный звук ч�
 - добавление станции с `ftp://` даёт ошибку, с `https://` — строку в списке;
 - play/pause меняет иконку и статус; при CORS — compat и звук;
 - прогресс-бар появляется при проверке и исчезает;
+- кнопка «Визуализация» скрывает панели, фон занимает экран, `Esc` возвращает всё;
 - мобильная ширина 390px без горизонтального скролла.
 
 ---

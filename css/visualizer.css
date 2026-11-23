@@ -19,6 +19,15 @@
   opacity: 0;
 }
 
+/* Режим визуализации: фон занимает всю сцену, панели скрыты. */
+body.is-viz-mode .bg-visualizer {
+  z-index: 1;
+}
+
+body.is-viz-mode .bg-visualizer__vignette {
+  opacity: 0.55;
+}
+
 .bg-visualizer canvas {
   width: 100%;
   height: 100%;

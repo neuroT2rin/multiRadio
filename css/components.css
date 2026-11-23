@@ -349,86 +349,6 @@
   outline-offset: 3px;
 }
 
-.switch-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin-top: 12px;
-  padding: 9px 10px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-align: left;
-  background: rgba(4, 8, 16, 0.25);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-}
-
-.switch-row:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.switch-row .switch {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.switch-row .switch__knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-}
-
-.switch-row[aria-pressed="true"] {
-  color: var(--text);
-}
-
-.switch-row[aria-pressed="true"] .switch {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.switch-row[aria-pressed="true"] .switch__knob {
-  background: var(--accent-ink);
-  transform: translateX(18px);
-}
-
-.segmented {
-  display: flex;
-  gap: 4px;
-  margin-top: 12px;
-  padding: 4px;
-  background: rgba(4, 8, 16, 0.4);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-}
-
-.segmented__btn {
-  flex: 1 1 0;
-  padding: 7px 6px;
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  transition: background 0.16s, color 0.16s;
-}
-
-.segmented__btn:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.segmented__btn[aria-pressed="true"] {
-  color: var(--accent-ink);
-  background: linear-gradient(135deg, var(--accent), #7dd3fc);
-}
-
 /* --------------------------------------------------------------------------
    Поиск
    -------------------------------------------------------------------------- */
@@ -1122,13 +1042,6 @@ body.modal-open {
 
 .quick-action__hint {
   font-size: 0.69rem;
-  color: var(--text-dim);
-}
-
-.visualizer-hint {
-  margin-top: 10px;
-  font-size: 0.71rem;
-  line-height: 1.5;
   color: var(--text-dim);
 }
 

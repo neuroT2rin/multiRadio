@@ -225,6 +225,70 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* --------------------------------------------------------------------------
+   Кнопка режима визуализации в шапке
+   -------------------------------------------------------------------------- */
+
+.viz-btn {
+  color: var(--text);
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+}
+
+.viz-btn:hover {
+  color: var(--text);
+  background: var(--accent-softer);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.viz-btn[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.viz-btn__ico {
+  font-size: 0.95rem;
+}
+
+/* --------------------------------------------------------------------------
+   Режим визуализации: на странице остаются только «Вид» и «Визуализация»
+   -------------------------------------------------------------------------- */
+
+body.is-viz-mode {
+  overflow: hidden;
+}
+
+body.is-viz-mode .app-container,
+body.is-viz-mode .app-footer,
+body.is-viz-mode .app-header .health-progress,
+body.is-viz-mode .skip-link,
+body.is-viz-mode .brand,
+body.is-viz-mode .status-bar {
+  display: none;
+}
+
+body.is-viz-mode .app-header {
+  background: transparent;
+  border-bottom-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.is-viz-mode .main-nav {
+  margin-left: 0;
+}
+
+body.is-viz-mode .nav-group:not(.nav-group--view) {
+  display: none;
+}
+
+body.is-viz-mode .viz-btn {
+  background: rgba(8, 14, 26, 0.55);
+  border-color: rgba(56, 189, 248, 0.42);
+}
+
 .nav-toggle__bars {
   position: relative;
   display: block;
@@ -479,10 +543,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
-
-  .visualizer-card {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 720px) {
@@ -508,6 +568,14 @@
   .app-container {
     padding: 18px 16px 36px;
     gap: 16px;
+  }
+
+  .viz-btn__label {
+    display: none;
+  }
+
+  .viz-btn {
+    padding: 8px 10px;
   }
 
   .content-grid,

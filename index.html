@@ -59,7 +59,7 @@
           </div>
         </div>
 
-        <div class="nav-group" data-nav-group>
+        <div class="nav-group nav-group--view" data-nav-group>
           <button class="nav-btn" type="button" aria-expanded="false" aria-haspopup="true">
             Вид <span class="nav-btn__chev" aria-hidden="true">▾</span>
           </button>
@@ -106,6 +106,10 @@
       </nav>
 
       <div class="header-meta">
+        <button class="nav-btn viz-btn" type="button" id="viz-toggle" data-command="ui:viz-mode" aria-pressed="false" aria-label="Визуализация" title="Режим визуализации (V)">
+          <span class="viz-btn__ico" aria-hidden="true">🌌</span>
+          <span class="viz-btn__label">Визуализация</span>
+        </button>
         <div class="status-bar">
           <span class="badge" id="network-badge" data-state="pending" title="Состояние сети">
             <span class="badge__dot" aria-hidden="true"></span>
@@ -240,22 +244,6 @@
           </div>
         </section>
 
-        <!-- Группы -->
-        <section class="card groups-card" aria-labelledby="groups-title">
-          <div class="section-head">
-            <div>
-              <h2 class="section-title" id="groups-title">Группы станций</h2>
-              <p class="section-subtitle">Объединяйте станции по настроению и включайте фильтр одним кликом.</p>
-            </div>
-            <button class="btn btn-primary btn-sm" type="button" data-command="group:create">➕ Создать группу</button>
-          </div>
-          <div class="groups-list" id="groups-list"></div>
-          <div class="empty-state empty-state--compact" id="groups-empty" hidden>
-            <p class="empty-state__title">Групп ещё нет</p>
-            <p class="empty-state__text">Создайте группу «Для работы», «Вечер» или любую другую — и фильтруйте станции одним кликом.</p>
-          </div>
-        </section>
-
         <!-- Сеть и источники -->
         <section class="card info-card" aria-labelledby="info-title">
           <div class="section-head">
@@ -298,22 +286,6 @@
       </div>
 
       <aside class="content-side">
-        <!-- Визуализация -->
-        <section class="card visualizer-card" aria-labelledby="viz-title">
-          <h2 class="section-title" id="viz-title">Визуализация</h2>
-          <p class="section-subtitle">Живой спектр текущего потока.</p>
-          <div class="segmented" role="group" aria-label="Режим фоновой визуализации">
-            <button class="segmented__btn" type="button" data-command="ui:mode" data-mode="spectrum" aria-pressed="true">Спектр</button>
-            <button class="segmented__btn" type="button" data-command="ui:mode" data-mode="aurora" aria-pressed="false">Аврора</button>
-            <button class="segmented__btn" type="button" data-command="ui:mode" data-mode="orbit" aria-pressed="false">Орбиты</button>
-          </div>
-          <button class="switch-row" type="button" id="bg-toggle" data-command="ui:toggle-bg" aria-pressed="true">
-            <span class="switch" aria-hidden="true"><span class="switch__knob"></span></span>
-            <span class="switch-row__text">Фоновая визуализация</span>
-          </button>
-          <p class="visualizer-hint" id="visualizer-hint">Реагирует на громкость и бас. Работает и на паузе — тихо и без лишней нагрузки.</p>
-        </section>
-
         <!-- Быстрые действия -->
         <section class="card quick-card" aria-labelledby="quick-title">
           <h2 class="section-title" id="quick-title">Быстрые действия</h2>
@@ -333,6 +305,22 @@
               <span class="quick-action__title">Настройки</span>
               <span class="quick-action__hint">Импорт и экспорт</span>
             </button>
+          </div>
+        </section>
+
+        <!-- Группы -->
+        <section class="card groups-card" aria-labelledby="groups-title">
+          <div class="section-head">
+            <div>
+              <h2 class="section-title" id="groups-title">Группы станций</h2>
+              <p class="section-subtitle">Объединяйте станции по настроению и включайте фильтр одним кликом.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" type="button" data-command="group:create">➕ Создать</button>
+          </div>
+          <div class="groups-list" id="groups-list"></div>
+          <div class="empty-state empty-state--compact" id="groups-empty" hidden>
+            <p class="empty-state__title">Групп ещё нет</p>
+            <p class="empty-state__text">Создайте группу «Для работы», «Вечер» или любую другую — и фильтруйте станции одним кликом.</p>
           </div>
         </section>
       </aside>
@@ -514,7 +502,7 @@
         <section class="settings-section" aria-labelledby="settings-about">
           <h3 class="settings-section__title" id="settings-about">О приложении</h3>
           <dl class="settings-list">
-            <div><dt>Версия</dt><dd id="settings-version">2.0.0</dd></div>
+            <div><dt>Версия</dt><dd id="settings-version">2.1.0</dd></div>
             <div><dt>Локальное хранилище</dt><dd id="settings-storage">—</dd></div>
             <div><dt>Технологии</dt><dd>HTML, CSS, Web Audio API, Canvas 2D</dd></div>
           </dl>

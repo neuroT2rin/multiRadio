@@ -16,23 +16,17 @@
   let lastBgAt = 0;
   let lastEqAt = 0;
   let lastMiniHint = "";
-  let lastHint = "";
   let miniNeedsIdle = true;
   let bgEnabled = true;
+  let vizMode = false;
   let reducedMotion = false;
+  let savedScroll = 0;
 
-  const VISUALIZER_HINTS = {
-    compat: "Режим совместимости: Web Audio отключён, спектр недоступен. Звук при этом работает.",
-    off: "Фон выключен. Включите его переключателем ниже.",
-    silent: "Поток играет, но браузер не отдаёт данные спектра (обычно из-за CORS).",
-    idle: "Фон оживает при воспроизведении. Реагирует на громкость, бас и удары.",
+  const MINI_HINTS = {
+    compat: "режим совместимости · без спектра",
+    silent: "нет данных спектра (CORS)",
+    idle: "визуализация потока",
   };
-
-  function setHint(next) {
-    if (next === lastHint) return;
-    lastHint = next;
-    dom.setText("#visualizer-hint", next);
-  }
 
   function setMiniHint(next) {
     if (next === lastMiniHint) return;
@@ -40,26 +34,20 @@
     dom.setText("#mini-hint", next);
   }
 
-  function updateHints(analysis, playing) {
+  function updateHints(analysis) {
     const compat = store.state.ui.compatMode;
 
     if (compat) {
-      setHint(VISUALIZER_HINTS.compat);
-      setMiniHint("режим совместимости · без спектра");
+      setMiniHint(MINI_HINTS.compat);
       return;
     }
 
     if (analysis && analysis.silent) {
-      setHint(VISUALIZER_HINTS.silent);
-      setMiniHint("нет данных спектра (CORS)");
+      setMiniHint(MINI_HINTS.silent);
       return;
     }
 
-    setMiniHint("визуализация потока");
-
-    if (!bgEnabled) setHint(VISUALIZER_HINTS.off);
-    else if (!playing) setHint(VISUALIZER_HINTS.idle);
-    else setHint("Живой спектр: полосы, волна и удары в реальном времени.");
+    setMiniHint(MINI_HINTS.idle);
   }
 
   function frame(ts) {
@@ -85,15 +73,19 @@
       lastEqAt = ts;
     }
 
-    if (bgEnabled) {
-      const bgInterval = playing ? 33 : 110;
+    if (bgEnabled || vizMode) {
+      const bgInterval = playing ? 33 : vizMode ? 60 : 110;
       if (ts - lastBgAt >= bgInterval) {
         MR.bg.draw(analysis, lastBgAt ? ts - lastBgAt : 16, ts);
         lastBgAt = ts;
       }
     }
 
-    updateHints(analysis, playing);
+    updateHints(analysis);
+  }
+
+  function showBackground() {
+    return bgEnabled || vizMode;
   }
 
   function applyUi() {
@@ -101,29 +93,51 @@
     bgEnabled = Boolean(ui.bgEnabled);
 
     const container = dom.$("#bg-visualizer");
-    if (container) container.classList.toggle("is-hidden", !bgEnabled);
+    if (container) container.classList.toggle("is-hidden", !showBackground());
 
     MR.bg.setMode(ui.mode);
 
-    dom.$$(".segmented__btn").forEach(function (button) {
-      button.setAttribute("aria-pressed", String(button.dataset.mode === ui.mode));
-    });
-
-    const toggle = dom.$("#bg-toggle");
-    if (toggle) toggle.setAttribute("aria-pressed", String(bgEnabled));
-
     if (reducedMotion) {
       // При включённом «уменьшении движения» рисуем один статичный кадр.
-      if (bgEnabled) MR.bg.draw(null, 0, 4000);
+      if (showBackground()) MR.bg.draw(null, 0, 4000);
       MR.mini.drawIdle();
-    } else if (bgEnabled) {
+    } else if (showBackground()) {
       lastBgAt = 0;
     }
 
-    updateHints(null, false);
+    updateHints(null);
 
     const modeSelect = dom.$("#setting-mode");
     if (modeSelect) modeSelect.value = store.state.ui.mode;
+  }
+
+  function setVizMode(next) {
+    const willEnable = Boolean(next);
+
+    if (willEnable === vizMode) return;
+
+    vizMode = willEnable;
+    document.body.classList.toggle("is-viz-mode", vizMode);
+
+    const toggle = dom.$("#viz-toggle");
+    if (toggle) toggle.setAttribute("aria-pressed", String(vizMode));
+    if (toggle) toggle.title = vizMode ? "Выйти из режима визуализации (Esc)" : "Режим визуализации (V)";
+
+    if (vizMode) {
+      savedScroll = global.scrollY || 0;
+      lastBgAt = 0;
+    }
+
+    if (MR.navUI) MR.navUI.closeAll();
+
+    applyUi();
+
+    if (!vizMode) {
+      // Возвращаем пользователя туда, где он был до входа в режим.
+      requestAnimationFrame(function () {
+        global.scrollTo(0, savedScroll);
+      });
+    }
   }
 
   function onPlayback() {
@@ -133,7 +147,38 @@
     } else {
       lastTs = 0;
     }
-    updateHints(null, store.state.playback.isPlaying);
+    updateHints(null);
+  }
+
+  function isTypingTarget(target) {
+    if (!target) return false;
+    return target.isContentEditable ||
+      /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || "");
+  }
+
+  function isOverlayOpen() {
+    if (MR.modal && MR.modal.hasOpen) return true;
+    const header = dom.$("#app-header");
+    return Boolean(
+      (header && header.classList.contains("is-nav-open")) ||
+      document.querySelector(".nav-group.is-open")
+    );
+  }
+
+  function onKeydown(event) {
+    if (event.key === "Escape") {
+      if (!vizMode || isOverlayOpen()) return;
+      setVizMode(false);
+      return;
+    }
+
+    if (
+      (event.key === "v" || event.key === "V" || event.key === "м" || event.key === "М") &&
+      !event.ctrlKey && !event.metaKey && !event.altKey &&
+      !isTypingTarget(event.target)
+    ) {
+      setVizMode(!vizMode);
+    }
   }
 
   function init() {
@@ -150,6 +195,9 @@
         const mode = payload && payload.dataset ? payload.dataset.mode : "";
         if (mode) store.setVisualizerMode(mode);
       },
+      "ui:viz-mode": function () {
+        setVizMode(!vizMode);
+      },
     });
 
     store.on("ui", applyUi);
@@ -157,6 +205,10 @@
 
     applyUi();
     MR.mini.drawIdle();
+
+    // capture: срабатываем раньше меню и модалок, чтобы не выйти из режима
+    // одним Esc вместе с закрытием меню.
+    document.addEventListener("keydown", onKeydown, true);
 
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState === "visible") {
@@ -173,11 +225,14 @@
   function dispose() {
     if (rafId) cancelAnimationFrame(rafId);
     rafId = null;
+    document.removeEventListener("keydown", onKeydown, true);
     MR.mini.dispose();
   }
 
   MR.visualizer = {
     init: init,
     dispose: dispose,
+    setVizMode: setVizMode,
+    isVizMode: function () { return vizMode; },
   };
 })(window);

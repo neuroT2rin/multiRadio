@@ -134,7 +134,9 @@ async function main() {
     bands: document.querySelectorAll('#eq-controls .eq-band').length,
     presets: document.querySelectorAll('#eq-presets .eq-preset').length,
     groups: document.querySelectorAll('#groups-list .group-card').length,
-    modePressed: document.querySelector('.segmented__btn[data-mode="spectrum"]').getAttribute('aria-pressed'),
+    modeChecked: document.querySelector('.nav-item[data-mode="spectrum"]').getAttribute('aria-checked'),
+    vizToggle: Boolean(document.querySelector('#viz-toggle')),
+    visualizerPanel: Boolean(document.querySelector('.visualizer-card')),
     progressExists: Boolean(document.querySelector('#health-progress')),
     networkState: document.querySelector('#network-badge').dataset.state,
     streamStatus: document.querySelector('#stream-status').dataset.state,
@@ -230,14 +232,41 @@ async function main() {
   await screenshot("equalizer.png");
   await evaluate(`document.querySelector('#tab-stations').click()`);
 
-  // Фон
+  // Фон: переключатель теперь живёт только в меню «Вид».
   results.bg = await evaluate(`(() => {
-    const before = document.querySelector('#bg-toggle').getAttribute('aria-pressed');
-    document.querySelector('#bg-toggle').click();
-    return { before, after: document.querySelector('#bg-toggle').getAttribute('aria-pressed'),
+    const toggle = document.querySelector('.nav-item[data-command="ui:toggle-bg"]');
+    const before = toggle.getAttribute('aria-checked');
+    toggle.click();
+    return { before, after: toggle.getAttribute('aria-checked'),
              hiddenClass: document.querySelector('#bg-visualizer').classList.contains('is-hidden') };
   })()`);
-  await evaluate(`document.querySelector('#bg-toggle').click()`);
+  await evaluate(`document.querySelector('.nav-item[data-command="ui:toggle-bg"]').click()`);
+
+  // Режим визуализации: страница скрыта, остаются «Вид» и «Визуализация».
+  results.vizMode = await evaluate(`(() => {
+    document.querySelector('#viz-toggle').click();
+    const radioGroup = document.querySelector('.nav-group:not(.nav-group--view)');
+    return {
+      bodyClass: document.body.classList.contains('is-viz-mode'),
+      pressed: document.querySelector('#viz-toggle').getAttribute('aria-pressed'),
+      mainHidden: getComputedStyle(document.querySelector('#main')).display === 'none',
+      footerHidden: getComputedStyle(document.querySelector('.app-footer')).display === 'none',
+      brandHidden: getComputedStyle(document.querySelector('.brand')).display === 'none',
+      viewVisible: getComputedStyle(document.querySelector('.nav-group--view')).display !== 'none',
+      radioHidden: getComputedStyle(radioGroup).display === 'none',
+      bgVisible: !document.querySelector('#bg-visualizer').classList.contains('is-hidden'),
+    };
+  })()`);
+  await sleep(400);
+  await screenshot("viz-mode.png");
+  results.vizModeExit = await evaluate(`(() => {
+    document.querySelector('#viz-toggle').click();
+    return {
+      bodyClass: document.body.classList.contains('is-viz-mode'),
+      pressed: document.querySelector('#viz-toggle').getAttribute('aria-pressed'),
+      mainBack: getComputedStyle(document.querySelector('#main')).display !== 'none',
+    };
+  })()`);
 
   // Настройки
   await evaluate(`document.querySelector('[data-command="settings:open"]').click()`);
