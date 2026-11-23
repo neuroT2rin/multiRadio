@@ -210,6 +210,7 @@
             <div class="chips">
               <span class="chip" id="station-bitrate-chip">— kbps</span>
               <span class="chip" id="station-source-chip">источник: —</span>
+              <span class="chip record-chip" id="record-chip" hidden>REC 00:00</span>
             </div>
           </div>
         </div>
@@ -226,6 +227,9 @@
           </button>
           <button class="icon-btn icon-btn--lg" type="button" id="next-btn" data-command="playback:next" aria-label="Следующая станция" title="Следующая (→)">
             <span aria-hidden="true">⏭</span>
+          </button>
+          <button class="icon-btn icon-btn--lg record-btn" type="button" id="record-btn" data-command="record:toggle" aria-pressed="false" aria-label="Записать эфир" title="Записать эфир (личная копия)">
+            <span aria-hidden="true">⏺</span>
           </button>
         </div>
 
@@ -648,6 +652,7 @@
   <script src="js/services/network.js"></script>
   <script src="js/services/health.js"></script>
   <script src="js/services/stats.js"></script>
+  <script src="js/services/recorder.js"></script>
   <!-- Интерфейс -->
   <script src="js/ui/toast.js"></script>
   <script src="js/ui/modal.js"></script>
@@ -666,6 +671,7 @@
   <script src="js/ui/stats.js"></script>
   <script src="js/ui/sleep-timer.js"></script>
   <script src="js/ui/voice-search.js"></script>
+  <script src="js/ui/recorder.js"></script>
   <script src="js/ui/theme.js"></script>
   <!-- Визуализация -->
   <script src="js/visualizer/mini.js"></script>

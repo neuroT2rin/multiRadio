@@ -461,6 +461,12 @@ async function main() {
   );
   await evaluate(`MR.audio.stop()`);
 
+  results.recorder = await evaluate(`(() => ({
+    supported: MR.recorder.supported(),
+    button: Boolean(document.querySelector('#record-btn')),
+    capture: Boolean(MR.audio.getCaptureStream()),
+  }))()`);
+
   results.stats = await evaluate(`(() => {
     const summary = MR.stats.getSummary();
     return {

@@ -28,6 +28,7 @@
   let compat = false;
   let graphReady = false;
   let graphFailed = false;
+  let captureDestination = null;
   let intendedPlaying = false;
   let activeUrl = "";
   let currentToken = 0;
@@ -160,6 +161,7 @@
     sourceNode = null;
     gainNode = null;
     analyserNode = null;
+    captureDestination = null;
     graphReady = false;
 
     if (ctx) {
@@ -180,6 +182,36 @@
 
   function graphUsable() {
     return graphReady && !compat;
+  }
+
+  /**
+   * Поток для записи эфира. В обычном режиме берём звук после анализатора,
+   * чтобы запись совпадала с тем, что слышно (с эквалайзером). В режиме
+   * совместимости пробуем captureStream() самого элемента (может быть
+   * недоступен из-за CORS).
+   */
+  function getCaptureStream() {
+    if (graphUsable() && analyserNode && ctx) {
+      if (!captureDestination) {
+        try {
+          captureDestination = ctx.createMediaStreamDestination();
+          analyserNode.connect(captureDestination);
+        } catch (error) {
+          captureDestination = null;
+        }
+      }
+      return captureDestination ? captureDestination.stream : null;
+    }
+
+    if (compat && audioEl && typeof audioEl.captureStream === "function") {
+      try {
+        return audioEl.captureStream();
+      } catch (error) {
+        return null;
+      }
+    }
+
+    return null;
   }
 
   /* ------------------------------------------------------------------------
@@ -642,5 +674,6 @@
     get isCompat() { return compat; },
     get isGraphReady() { return graphReady; },
     getSourceLabel: sourceLabel,
+    getCaptureStream: getCaptureStream,
   };
 })(window);

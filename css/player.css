@@ -509,6 +509,29 @@ input[type="range"].range:focus-visible {
   padding-right: 6px;
 }
 
+.record-btn {
+  color: var(--text-muted);
+}
+
+.record-btn.is-recording {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.5);
+  animation: record-pulse 1.4s ease-out infinite;
+}
+
+.record-chip {
+  color: #fda4af;
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.35);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes record-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.3); }
+  100% { box-shadow: 0 0 0 7px rgba(248, 113, 113, 0); }
+}
+
 .fav-btn[aria-pressed="true"] {
   color: var(--warning);
   text-shadow: 0 0 12px rgba(251, 191, 36, 0.55);
@@ -856,4 +879,10 @@ html[data-theme="light"] .eq-meter {
 
 html[data-theme="light"] .health-dot {
   box-shadow: 0 0 0 3px rgba(20, 40, 70, 0.05);
+}
+
+html[data-theme="light"] .record-chip {
+  color: #b8293f;
+  background: rgba(194, 47, 69, 0.08);
+  border-color: rgba(194, 47, 69, 0.25);
 }

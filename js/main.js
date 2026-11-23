@@ -40,6 +40,8 @@
     MR.health.dispose();
     MR.network.dispose();
     MR.stats.dispose();
+    MR.recorder.dispose();
+    MR.recorderUI.dispose();
     MR.sleepTimer.dispose();
     MR.voiceSearch.dispose();
     MR.visualizer.dispose();
@@ -64,6 +66,7 @@
     MR.navUI.init();
     MR.headerUI.init();
     MR.playerUI.init();
+    MR.recorderUI.init();
     MR.stationsUI.init();
     MR.groupsUI.init();
     MR.planUI.init();
