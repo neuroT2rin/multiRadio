@@ -66,6 +66,7 @@
     MR.playerUI.init();
     MR.stationsUI.init();
     MR.groupsUI.init();
+    MR.planUI.init();
     MR.eqUI.init();
     MR.stationForm.init();
     MR.settingsUI.init();

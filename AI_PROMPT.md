@@ -114,7 +114,7 @@ tests/  store.test.js · browser-smoke.js
 utils → config/app → config/stations → config/equalizer → storage → state → dom
 → analyser → audio → network → health → stats
 → toast → modal → commands → views → nav → header → player → stations → groups
-→ equalizer → station-form → settings → info → stats → sleep-timer → voice-search
+→ plan → equalizer → station-form → settings → info → stats → sleep-timer → voice-search
 → visualizer/mini → visualizer/background → visualizer/index → main
 ```
 
@@ -149,6 +149,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/player.js` | Карточка «сейчас играет», управление, громкость, `Space` | `init`, `render` |
 | `js/ui/stations.js` | Списки станций/избранного, поиск, фильтры, вид «список/плитка», точки здоровья | `init`, `render` |
 | `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой) | `init`, `render`, `openEditor(groupId)` |
+| `js/ui/plan.js` | Панель «План эфира»: сейчас и следующие станции по списку | `init`, `render` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
 | `js/ui/settings.js` | Настройки вида, compat, export/import/reset | `init`, `open` |
@@ -367,7 +368,8 @@ document.querySelector("#stations-list").appendChild(row);
 Прочее:   modal-confirm, confirm-title, confirm-message, confirm-ok, confirm-cancel,
           info-connection, info-connection-state, info-source, info-bitrate,
           info-playback, info-health, recheck-btn, recheck-label,
-          bg-visualizer, bg-canvas, uptime, toast-region
+          plan-now, plan-next, plan-now-state, stats-total, stats-stations,
+          stats-genres, stats-empty, bg-visualizer, bg-canvas, uptime, toast-region
 ```
 
 Полный список: `grep 'id="' index.html`. ID — контракт: если переименовываешь,
@@ -528,6 +530,7 @@ VPN точно определить нельзя — не обещать это�
 | Таймер сна | `ui/sleep-timer.js`, меню в шапке | `sleep-timer.js`, `index.html`, `main.js` | запуск/отмена, отсчёт, остановка |
 | Голосовой подбор станции | `ui/voice-search.js`, `index.html` (toolbar) | те же | `MR.voiceSearch.match()`, микрофон, fallback |
 | Статистика прослушивания | `services/stats.js`, `ui/stats.js` | те же + `index.html` (сайдбар) | включить радио, подождать, панель |
+| План эфира | `ui/plan.js`, `index.html` (под «Источники и сеть») | те же | текущая станция + 3 следующие |
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |

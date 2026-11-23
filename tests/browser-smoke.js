@@ -432,6 +432,12 @@ async function main() {
   })()`);
   await screenshot("playing.png");
 
+  results.plan = await evaluate(`(() => ({
+    now: (document.querySelector('#plan-now .plan-now__name') || {}).textContent || '',
+    next: document.querySelectorAll('#plan-next .plan-next__item').length,
+    state: document.querySelector('#plan-now-state').textContent,
+  }))()`);
+
   results.eqDisabledAfterPlay = await evaluate(
     `[...document.querySelectorAll('.eq-band__slider')].filter(s => s.disabled).length`
   );

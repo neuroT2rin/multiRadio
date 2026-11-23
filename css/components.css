@@ -993,6 +993,157 @@ body.modal-open {
 }
 
 /* --------------------------------------------------------------------------
+   План эфира
+   -------------------------------------------------------------------------- */
+
+.plan-now {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(4, 8, 16, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.plan-now__station {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.plan-now__emoji {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  font-size: 1.1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.plan-now__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.plan-now__name {
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-now__meta {
+  overflow: hidden;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-now__source {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.plan-now__empty {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.plan-label {
+  margin: 14px 0 7px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.plan-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plan-next__item-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-next__index {
+  flex: 0 0 auto;
+  width: 14px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.plan-next__item {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px 10px;
+  color: inherit;
+  text-align: left;
+  background: rgba(4, 8, 16, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.16s, background 0.16s;
+}
+
+.plan-next__item:hover {
+  background: var(--accent-softer);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.plan-next__emoji {
+  width: 22px;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.plan-next__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.plan-next__name {
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-next__meta {
+  overflow: hidden;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-next__empty {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.plan-hint {
+  margin-top: 12px;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+/* --------------------------------------------------------------------------
    Информация о сети
    -------------------------------------------------------------------------- */
 
