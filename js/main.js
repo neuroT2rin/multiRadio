@@ -40,6 +40,7 @@
     MR.health.dispose();
     MR.network.dispose();
     MR.sleepTimer.dispose();
+    MR.voiceSearch.dispose();
     MR.visualizer.dispose();
     MR.infoUI.dispose();
   }
@@ -68,6 +69,7 @@
     MR.settingsUI.init();
     MR.infoUI.init();
     MR.sleepTimer.init();
+    MR.voiceSearch.init();
     MR.visualizer.init();
 
     // 4. Проверка станций — последней, чтобы интерфейс уже был готов.

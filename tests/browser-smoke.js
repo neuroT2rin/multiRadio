@@ -364,6 +364,14 @@ async function main() {
   await screenshot("settings.png");
   await evaluate(`document.querySelector('#modal-settings [data-close-modal]').click()`);
 
+  // Голосовой поиск: локальный матчер без микрофона
+  results.voiceSearch = await evaluate(`(() => ({
+    supported: MR.voiceSearch.supported,
+    jazz: (MR.voiceSearch.match('привет, хочу послушать джаз') || {}).name || null,
+    calm: (MR.voiceSearch.match('что-нибудь спокойное для работы') || {}).name || null,
+    rock: (MR.voiceSearch.match('включи рок') || {}).name || null,
+  }))()`);
+
   // Таймер сна: запуск и отмена
   results.sleepTimer = await evaluate(`(() => {
     document.querySelector('[data-command="timer:start"][data-minutes="15"]').click();

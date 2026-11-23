@@ -251,6 +251,8 @@
                 <label class="sr-only" for="stations-search">Поиск станций</label>
                 <input type="search" id="stations-search" placeholder="Поиск: название, жанр…" autocomplete="off" />
               </div>
+              <button class="icon-btn voice-btn" type="button" id="voice-search-btn" data-command="search:voice" aria-pressed="false" aria-label="Голосовой поиск" title="Голосовой поиск: скажите, что хотите послушать">🎤</button>
+              <span class="voice-live" id="voice-live" role="status" aria-live="polite" hidden></span>
               <div class="view-switch" role="group" aria-label="Вид списка станций">
                 <button class="view-switch__btn" type="button" data-command="stations:view" data-station-view="list" aria-pressed="true" aria-label="Списком" title="Списком">☰</button>
                 <button class="view-switch__btn" type="button" data-command="stations:view" data-station-view="grid" aria-pressed="false" aria-label="Плиткой" title="Плиткой">▦</button>
@@ -607,6 +609,7 @@
   <script src="js/ui/settings.js"></script>
   <script src="js/ui/info.js"></script>
   <script src="js/ui/sleep-timer.js"></script>
+  <script src="js/ui/voice-search.js"></script>
   <!-- Визуализация -->
   <script src="js/visualizer/mini.js"></script>
   <script src="js/visualizer/background.js"></script>

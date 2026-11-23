@@ -114,7 +114,7 @@ tests/  store.test.js · browser-smoke.js
 utils → config/app → config/stations → config/equalizer → storage → state → dom
 → analyser → audio → network → health
 → toast → modal → commands → views → nav → header → player → stations → groups
-→ equalizer → station-form → settings → info → sleep-timer
+→ equalizer → station-form → settings → info → sleep-timer → voice-search
 → visualizer/mini → visualizer/background → visualizer/index → main
 ```
 
@@ -153,6 +153,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/settings.js` | Настройки вида, compat, export/import/reset | `init`, `open` |
 | `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
 | `js/ui/sleep-timer.js` | Таймер сна в шапке: отсчёт и остановка радио | `init`, `start(minutes)`, `cancel`, `dispose`, `remainingMs` |
+| `js/ui/voice-search.js` | Голосовой подбор станции (Web Speech API + локальный матчер) | `init`, `start`, `stop`, `match(text)`, `supported`, `dispose` |
 | `js/visualizer/mini.js` | Визуализация потока в плеере (3 режима) | `init`, `draw(analysis)`, `drawIdle`, `setMode`, `mode`, `resize`, `dispose` |
 | `js/visualizer/background.js` | Полноэкранный canvas, режимы | `init`, `draw(analysis, dt, now)`, `resize`, `setMode`, `mode` |
 | `js/visualizer/index.js` | Единственный rAF-цикл, синхронизация UI и режим визуализации | `init`, `dispose`, `setVizMode(bool)`, `isVizMode()` |
@@ -293,6 +294,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 | `eq:reset` | `ui/equalizer.js` |
 | `health:check` | `ui/info.js` |
 | `timer:start`, `timer:cancel` | `ui/sleep-timer.js` |
+| `search:voice` | `ui/voice-search.js` |
 | `settings:open`, `settings:export`, `settings:import`, `settings:reset`, `settings:restore-stations` | `ui/settings.js` |
 | `ui:toggle-bg`, `ui:mode`, `ui:mini-mode`, `ui:viz-mode` | `visualizer/index.js` |
 
@@ -343,7 +345,8 @@ document.querySelector("#stations-list").appendChild(row);
           next-btn, volume, volume-value, mute-btn, mute-icon, mini-canvas, mini-hint
 Вкладки:  tab-stations, tab-favorites, tab-equalizer, panel-stations,
           panel-favorites, panel-equalizer,
-          stations-search, filter-favorites, group-filter-chip, group-filter-name,
+          stations-search, voice-search-btn, voice-live, filter-favorites,
+          group-filter-chip, group-filter-name,
           stations-count, stations-list, stations-empty, favorites-list,
           favorites-empty, eq-presets, eq-controls, eq-hint
 Группы:   groups-list, groups-empty, modal-group, group-form, group-modal-title,
@@ -516,6 +519,7 @@ VPN точно определить нельзя — не обещать это�
 | Визуализатор, режимы, canvas | `visualizer/*`, `analyser.js` | те же + `visualizer.css` | скриншот, `level>0`, нет ошибок |
 | Режим визуализации (шапка) | `visualizer/index.js`, `index.html` (header), `css/layout.css` | те же | клик туда/обратно, `Esc`, скрытие панелей |
 | Таймер сна | `ui/sleep-timer.js`, меню в шапке | `sleep-timer.js`, `index.html`, `main.js` | запуск/отмена, отсчёт, остановка |
+| Голосовой подбор станции | `ui/voice-search.js`, `index.html` (toolbar) | те же | `MR.voiceSearch.match()`, микрофон, fallback |
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
@@ -615,6 +619,10 @@ VPN точно определить нельзя — не обещать это�
 - Строки интерфейса — по-русски; не переводить тосты/ошибки на английский.
 - `localStorage` может быть недоступен — приложение работает в памяти.
 - Не обещай определение VPN: это эвристика.
+- Голосовой поиск не должен зависеть от внешних API: распознавание — Web Speech
+  API, понимание — встроенная модель Chrome (если `LanguageModel.availability()`
+  равно `"available"`) или локальный матчер `match()`. Микрофон требует
+  разрешения и работает только по клику.
 
 ---
 
