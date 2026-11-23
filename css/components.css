@@ -9,13 +9,15 @@
 .card {
   position: relative;
   padding: 20px;
+  /* Полупрозрачные панели: фоновая визуализация умеренно просвечивает,
+     а blur и тёмная подложка сохраняют читаемость текста. */
   background:
-    linear-gradient(180deg, rgba(18, 29, 48, 0.86), rgba(10, 17, 30, 0.91));
+    linear-gradient(180deg, rgba(17, 28, 46, 0.76), rgba(9, 16, 28, 0.82));
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px) saturate(125%);
+  -webkit-backdrop-filter: blur(16px) saturate(125%);
 }
 
 .card::before {
