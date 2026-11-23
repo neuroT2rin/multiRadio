@@ -427,6 +427,8 @@ document.querySelector("#stations-list").appendChild(row);
   `eqUI.tick(analysis)` (~20 Гц), `bg.draw(analysis, dt, now)` (30 fps при игре,
   ~16 fps в режиме визуализации без звука, ~9 fps в паузе). Не создавай второй rAF.
 - `MR.bg` режимы: `spectrum` (круговой спектр), `aurora` (волны), `orbit` (орбиты).
+  Круговой спектр центрируется по экрану (`cy = height * 0.5`), орбиты — чуть
+  выше центра (`0.46`), чтобы кольца не упирались в подвал.
   Добавление режима: `config/app.js` → ветка в `background.js::draw` →
   кнопка `data-command="ui:mode" data-mode="..."` в меню «Вид» → `visualizer/index.js`
   и `ui/nav.js` синхронизируют `aria-checked` автоматически.

@@ -144,7 +144,7 @@
 
   function drawSpectrum(analysis, now, hue, energy, idle) {
     const cx = width / 2;
-    const cy = height * 0.46;
+    const cy = height * 0.5;
     const baseRadius = Math.min(width, height) * 0.085 +
       (idle ? 0 : utils.clamp(analysis.level, 0, 1) * 34) +
       beatFlash * 7;
