@@ -364,6 +364,17 @@ async function main() {
   await screenshot("settings.png");
   await evaluate(`document.querySelector('#modal-settings [data-close-modal]').click()`);
 
+  // Таймер сна: запуск и отмена
+  results.sleepTimer = await evaluate(`(() => {
+    document.querySelector('[data-command="timer:start"][data-minutes="15"]').click();
+    const started = document.querySelector('#sleep-timer-label').textContent;
+    document.querySelector('[data-command="timer:cancel"]').click();
+    return {
+      started: started,
+      cancelled: document.querySelector('#sleep-timer-label').textContent,
+    };
+  })()`);
+
   // Локальный звук: проверяем весь путь <audio> → Web Audio → анализатор → canvas.
   const wav = makeWavDataUrl(6, 8000);
   await evaluate(`(() => {

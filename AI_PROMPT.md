@@ -114,7 +114,7 @@ tests/  store.test.js · browser-smoke.js
 utils → config/app → config/stations → config/equalizer → storage → state → dom
 → analyser → audio → network → health
 → toast → modal → commands → views → nav → header → player → stations → groups
-→ equalizer → station-form → settings → info
+→ equalizer → station-form → settings → info → sleep-timer
 → visualizer/mini → visualizer/background → visualizer/index → main
 ```
 
@@ -152,6 +152,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
 | `js/ui/settings.js` | Настройки вида, compat, export/import/reset | `init`, `open` |
 | `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
+| `js/ui/sleep-timer.js` | Таймер сна в шапке: отсчёт и остановка радио | `init`, `start(minutes)`, `cancel`, `dispose`, `remainingMs` |
 | `js/visualizer/mini.js` | Визуализация потока в плеере (3 режима) | `init`, `draw(analysis)`, `drawIdle`, `setMode`, `mode`, `resize`, `dispose` |
 | `js/visualizer/background.js` | Полноэкранный canvas, режимы | `init`, `draw(analysis, dt, now)`, `resize`, `setMode`, `mode` |
 | `js/visualizer/index.js` | Единственный rAF-цикл, синхронизация UI и режим визуализации | `init`, `dispose`, `setVizMode(bool)`, `isVizMode()` |
@@ -291,6 +292,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 | `playback:toggle`, `playback:stop`, `playback:next`, `playback:prev`, `playback:mute` | `ui/player.js` |
 | `eq:reset` | `ui/equalizer.js` |
 | `health:check` | `ui/info.js` |
+| `timer:start`, `timer:cancel` | `ui/sleep-timer.js` |
 | `settings:open`, `settings:export`, `settings:import`, `settings:reset`, `settings:restore-stations` | `ui/settings.js` |
 | `ui:toggle-bg`, `ui:mode`, `ui:mini-mode`, `ui:viz-mode` | `visualizer/index.js` |
 
@@ -333,9 +335,9 @@ document.querySelector("#stations-list").appendChild(row);
 Разметка — `index.html` (≈580 строк). Часто используемые id:
 
 ```text
-Шапка:    app-header, main-nav, nav-toggle, viz-toggle, network-badge,
-          network-badge-text, stream-status, health-progress,
-          health-progress-fill, health-progress-label
+Шапка:    app-header, main-nav, nav-toggle, viz-toggle, sleep-timer,
+          sleep-timer-label, network-badge, network-badge-text, stream-status,
+          health-progress, health-progress-fill, health-progress-label
 Плеер:    station-name, station-genre, station-bitrate-chip, station-source-chip,
           player-art-emoji, play-pause-btn, play-pause-icon, stop-btn, prev-btn,
           next-btn, volume, volume-value, mute-btn, mute-icon, mini-canvas, mini-hint
@@ -513,6 +515,7 @@ VPN точно определить нельзя — не обещать это�
 | Эквалайзер, пресеты, полосы | `config/equalizer.js`, `ui/equalizer.js`, `audio.js::applyEq` | те же | 10 полос, пресет, метры |
 | Визуализатор, режимы, canvas | `visualizer/*`, `analyser.js` | те же + `visualizer.css` | скриншот, `level>0`, нет ошибок |
 | Режим визуализации (шапка) | `visualizer/index.js`, `index.html` (header), `css/layout.css` | те же | клик туда/обратно, `Esc`, скрытие панелей |
+| Таймер сна | `ui/sleep-timer.js`, меню в шапке | `sleep-timer.js`, `index.html`, `main.js` | запуск/отмена, отсчёт, остановка |
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
