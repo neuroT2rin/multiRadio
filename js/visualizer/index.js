@@ -96,6 +96,7 @@
     if (container) container.classList.toggle("is-hidden", !showBackground());
 
     MR.bg.setMode(ui.mode);
+    MR.mini.setMode(ui.miniMode);
 
     if (reducedMotion) {
       // При включённом «уменьшении движения» рисуем один статичный кадр.
@@ -197,6 +198,10 @@
       },
       "ui:viz-mode": function () {
         setVizMode(!vizMode);
+      },
+      "ui:mini-mode": function (payload) {
+        const miniMode = payload && payload.dataset ? payload.dataset.miniMode : "";
+        if (miniMode) store.setMiniMode(miniMode);
       },
     });
 

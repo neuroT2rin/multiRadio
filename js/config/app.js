@@ -13,6 +13,8 @@
 
     views: ["stations", "favorites", "equalizer"],
     visualizerModes: ["spectrum", "aurora", "orbit"],
+    /** Режимы компактной визуализации потока в плеере. */
+    miniVisualizerModes: ["wave", "ribbon", "sparkle"],
 
     health: {
       /** Период автоматической проверки станций. */

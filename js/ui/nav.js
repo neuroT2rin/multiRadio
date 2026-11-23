@@ -78,6 +78,10 @@
     nav.querySelectorAll('[data-command="ui:mode"]').forEach(function (item) {
       item.setAttribute("aria-checked", String(item.dataset.mode === state.ui.mode));
     });
+
+    nav.querySelectorAll('[data-command="ui:mini-mode"]').forEach(function (item) {
+      item.setAttribute("aria-checked", String(item.dataset.miniMode === state.ui.miniMode));
+    });
   }
 
   function init() {

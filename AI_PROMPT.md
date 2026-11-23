@@ -152,7 +152,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
 | `js/ui/settings.js` | Настройки вида, compat, export/import/reset | `init`, `open` |
 | `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
-| `js/visualizer/mini.js` | Плавная волна потока в плеере | `init`, `draw(analysis)`, `drawIdle`, `resize`, `dispose` |
+| `js/visualizer/mini.js` | Визуализация потока в плеере (3 режима) | `init`, `draw(analysis)`, `drawIdle`, `setMode`, `mode`, `resize`, `dispose` |
 | `js/visualizer/background.js` | Полноэкранный canvas, режимы | `init`, `draw(analysis, dt, now)`, `resize`, `setMode`, `mode` |
 | `js/visualizer/index.js` | Единственный rAF-цикл, синхронизация UI и режим визуализации | `init`, `dispose`, `setVizMode(bool)`, `isVizMode()` |
 | `js/main.js` | Инициализация, uptime, cleanup | — |
@@ -192,7 +192,8 @@ utils → config/app → config/stations → config/equalizer → storage → st
   network: { online, status: 'checking'|'online'|'restricted'|'offline',
              effectiveType, downlink },
 
-  ui: { bgEnabled, mode: 'spectrum'|'aurora'|'orbit', compatMode }
+  ui: { bgEnabled, mode: 'spectrum'|'aurora'|'orbit',
+        miniMode: 'wave'|'ribbon'|'sparkle', compatMode }
 }
 ```
 
@@ -210,7 +211,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | Фильтры | `setFilters({favoritesOnly?, groupId?, query?})`, `clearFilters()` |
 | Плеер/звук | `setPlayback(patch)`, `setVolume(0..1)`, `toggleMute()`, `setEqGain(i, дБ)`, `setEqGains(arr)`, `applyEqPreset(key)`, `resetEq()` |
 | Проверка | `setHealth(id, result)`, `setHealthBatch(map)`, `setHealthProgress(patch)` |
-| Сеть/вид | `setNetwork(patch)`, `setView(view)`, `setBgEnabled(bool)`, `toggleBg()`, `setVisualizerMode(mode)`, `setCompatMode(bool)` |
+| Сеть/вид | `setNetwork(patch)`, `setView(view)`, `setBgEnabled(bool)`, `toggleBg()`, `setVisualizerMode(mode)`, `setMiniMode(mode)`, `setCompatMode(bool)` |
 | Данные | `exportData() → v2-объект`, `importData(obj) → {ok, counts\|error}`, `resetAll()`, `restoreDefaultStations()` |
 
 ### 5.3 Входные данные
@@ -260,9 +261,12 @@ payload**. Обработчик обязан делать `payload = payload || 
   stations: [{ id, name, genre, bitrate, emoji, primary, fallbacks }],
   favorites: [id], groups: [{ id, name, stationIds }],
   volume, muted, eq: { gains: [10], preset }, view,
-  ui: { bgEnabled, mode, compatMode }
+  ui: { bgEnabled, mode, miniMode, compatMode }
 }
 ```
+
+`miniMode` — режим визуализации потока в плеере; при загрузке проверяется по
+`MR.config.miniVisualizerModes`, неизвестное значение откатывается к `wave`.
 
 `hydrate(data)` понимает v1: `volume`, `equalizer[]`, `favorites`, `groups`,
 `stationGroups` (маппинг → membership), `stations`.
@@ -286,7 +290,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 | `eq:reset` | `ui/equalizer.js` |
 | `health:check` | `ui/info.js` |
 | `settings:open`, `settings:export`, `settings:import`, `settings:reset`, `settings:restore-stations` | `ui/settings.js` |
-| `ui:toggle-bg`, `ui:mode`, `ui:viz-mode` | `visualizer/index.js` |
+| `ui:toggle-bg`, `ui:mode`, `ui:mini-mode`, `ui:viz-mode` | `visualizer/index.js` |
 
 Новую команду регистрировать **до** первого клика (в `init()`), иначе
 `commands.run` напишет warning.
@@ -358,6 +362,9 @@ document.querySelector("#stations-list").appendChild(row);
 **Раскладка:** `.content-main` — «Станции/Избранные/Эквалайзер» и «Источники и
 сеть»; `.content-side` — «Быстрые действия», под ним «Группы станций».
 Отдельной панели визуализации нет: режимы и фон — в меню «Вид» и в настройках.
+В меню «Вид» три блока: «Фон» (`ui:toggle-bg`), «Режим визуализации»
+(`ui:mode`, полный экран) и «Визуализация потока» (`ui:mini-mode`, полоса
+в плеере).
 
 **Состояния бейджей:** `[data-state]` на `.badge`: `pending|online|restricted|offline`
 (сеть), `idle|connecting|buffering|playing|paused|error|blocked` (плеер).
@@ -445,9 +452,14 @@ document.querySelector("#stations-list").appendChild(row);
   разворачивает фон на весь экран и не трогает сохранённый `ui.bgEnabled`.
   Повторный клик, `Esc` или `V` (в русской раскладке — `М`) возвращают страницу
   и прежнюю позицию скролла.
-- `MR.mini` — плавная зеркальная волна: 72 опорные точки, косинусная выборка
-  спектра, Catmull-Rom сглаживание и экспоненциальное сглаживание по времени
-  (`ATTACK`/`RELEASE`). Столбиков больше нет — не возвращай их.
+- `MR.mini` — компактная визуализация потока с тремя режимами
+  (`ui.miniMode`): `wave` — зеркальная плавная волна; `ribbon` — несколько
+  световых лент с аддитивным свечением; `sparkle` — искры из светящегося
+  основания (частицы живут внутри `mini.js`, своего rAF не создают).
+  Общая база: 72 опорные точки, косинусная выборка спектра, Catmull-Rom
+  сглаживание и экспоненциальное сглаживание по времени (`ATTACK`/`RELEASE`).
+  Режим задаётся `MR.mini.setMode(mode)` из `applyUi`; столбиков больше нет —
+  не возвращай их.
 - Canvas: DPR ≤2, `setTransform` после изменения размеров, `canvas.width`
   меняется только при реальном resize (иначе каждый кадр очищает canvas).
 - `prefers-reduced-motion` → статичный кадр, без цикла.
@@ -493,6 +505,7 @@ VPN точно определить нельзя — не обещать это�
 | Эквалайзер, пресеты, полосы | `config/equalizer.js`, `ui/equalizer.js`, `audio.js::applyEq` | те же | 10 полос, пресет, метры |
 | Визуализатор, режимы, canvas | `visualizer/*`, `analyser.js` | те же + `visualizer.css` | скриншот, `level>0`, нет ошибок |
 | Режим визуализации (шапка) | `visualizer/index.js`, `index.html` (header), `css/layout.css` | те же | клик туда/обратно, `Esc`, скрытие панелей |
+| Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
 | Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings` | экспорт→импорт, v1-файл |
@@ -556,6 +569,15 @@ VPN точно определить нельзя — не обещать это�
 4. Строка в §3/§4 и в маршрутную таблицу.
 5. Тест/проверка, обновить документацию.
 
+### H. Добавить режим визуализации потока (мини)
+1. `config/app.js`: имя в `miniVisualizerModes`.
+2. `mini.js`: функция отрисовки + ветка в `draw()` и `drawIdle()`.
+3. `index.html`: пункт в меню «Вид → Визуализация потока»:
+   `data-command="ui:mini-mode" data-mini-mode="..."`.
+4. `state.js`: ничего, если режим валидируется по `miniVisualizerModes`;
+   `nav.js` синхронизирует `aria-checked` по `state.ui.miniMode`.
+5. Проверить переключение на паузе и во время игры, reload (persist).
+
 ---
 
 ## 13. Подводные камни (проверять в первую очередь)
@@ -615,7 +637,8 @@ chrome --headless=new --no-sandbox --disable-gpu \
 node tests/browser-smoke.js "file:///.../index.html" "<ws-endpoint>" tests/screenshots
 ```
 Проверяет: загрузку, меню, группу, фильтр, валидацию/добавление станции,
-EQ, фон (переключатель в меню «Вид»), режим визуализации туда/обратно,
+EQ, фон (переключатель в меню «Вид»), три режима визуализации потока
+(переключение + отрисовка), режим визуализации туда/обратно,
 настройки, мобильный drawer, реальный звук через WAV data-URL,
 уровень анализатора, отрисовку canvas, `console.error`/исключения.
 Ожидается `consoleErrors: []`, `exceptions: []`, `localPlayback.state: "playing"`.

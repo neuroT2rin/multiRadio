@@ -62,7 +62,7 @@
 
       network: { online: true, status: "checking", effectiveType: "", downlink: null },
 
-      ui: { bgEnabled: true, mode: "spectrum", compatMode: false },
+      ui: { bgEnabled: true, mode: "spectrum", miniMode: "wave", compatMode: false },
 
       loadedAt: Date.now(),
     };
@@ -304,6 +304,7 @@
     const ui = payload.ui && typeof payload.ui === "object" ? payload.ui : {};
     const view = config.views.indexOf(payload.view) !== -1 ? payload.view : "stations";
     const mode = config.visualizerModes.indexOf(ui.mode) !== -1 ? ui.mode : "spectrum";
+    const miniMode = config.miniVisualizerModes.indexOf(ui.miniMode) !== -1 ? ui.miniMode : "wave";
 
     state.stations = stations;
     state.groups = groups;
@@ -316,6 +317,7 @@
     state.ui = {
       bgEnabled: ui.bgEnabled !== false,
       mode: mode,
+      miniMode: miniMode,
       compatMode: Boolean(ui.compatMode),
     };
     state.filters = { favoritesOnly: false, groupId: null, query: "" };
@@ -378,6 +380,7 @@
       ui: {
         bgEnabled: state.ui.bgEnabled,
         mode: state.ui.mode,
+        miniMode: state.ui.miniMode,
         compatMode: state.ui.compatMode,
       },
     };
@@ -941,6 +944,14 @@
     return mode;
   }
 
+  function setMiniMode(mode) {
+    if (config.miniVisualizerModes.indexOf(mode) === -1) return state.ui.miniMode;
+    state.ui = Object.assign({}, state.ui, { miniMode: mode });
+    emit("ui");
+    save();
+    return mode;
+  }
+
   function setCompatMode(enabled) {
     state.ui = Object.assign({}, state.ui, { compatMode: Boolean(enabled) });
     emit("ui");
@@ -1076,6 +1087,7 @@
     setBgEnabled: setBgEnabled,
     toggleBg: toggleBg,
     setVisualizerMode: setVisualizerMode,
+    setMiniMode: setMiniMode,
     setCompatMode: setCompatMode,
 
     exportData: exportData,

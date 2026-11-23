@@ -242,6 +242,36 @@ async function main() {
   })()`);
   await evaluate(`document.querySelector('.nav-item[data-command="ui:toggle-bg"]').click()`);
 
+  // Режимы визуализации потока: переключение из меню и отрисовка в каждом.
+  results.miniModes = await evaluate(`(() => {
+    const fake = {
+      active: true, silent: false, level: 0.7, bass: 0.6, treble: 0.4,
+      spectrum: Array.from({ length: 64 }, (_, i) => 0.2 + 0.6 * Math.abs(Math.sin(i * 0.4))),
+      wave: new Uint8Array(1024).fill(128),
+    };
+    const canvas = document.querySelector('#mini-canvas');
+    const ctx = canvas.getContext('2d');
+    const pixels = () => {
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let count = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 0) count += 1;
+      return count;
+    };
+
+    const drawn = {};
+    ['ribbon', 'sparkle', 'wave'].forEach((mode) => {
+      document.querySelector('.nav-item[data-command="ui:mini-mode"][data-mini-mode="' + mode + '"]').click();
+      MR.mini.draw(fake);
+      drawn[mode] = pixels();
+    });
+
+    return {
+      drawn: drawn,
+      state: MR.store.state.ui.miniMode,
+      checked: document.querySelector('.nav-item[data-command="ui:mini-mode"][data-mini-mode="wave"]').getAttribute('aria-checked'),
+    };
+  })()`);
+
   // Режим визуализации: страница скрыта, остаются «Вид» и «Визуализация».
   results.vizMode = await evaluate(`(() => {
     document.querySelector('#viz-toggle').click();
