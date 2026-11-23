@@ -264,9 +264,14 @@ body.is-viz-mode .app-container,
 body.is-viz-mode .app-footer,
 body.is-viz-mode .app-header .health-progress,
 body.is-viz-mode .skip-link,
-body.is-viz-mode .brand,
-body.is-viz-mode .status-bar {
+body.is-viz-mode .brand {
   display: none;
+}
+
+/* Статусы скрыты визуально, но сохраняют место: кнопка «Визуализация»
+   остаётся на прежнем месте и не прыгает при входе в режим. */
+body.is-viz-mode .status-bar {
+  visibility: hidden;
 }
 
 body.is-viz-mode .app-header {

@@ -123,10 +123,6 @@
       </nav>
 
       <div class="header-meta">
-        <button class="nav-btn viz-btn" type="button" id="viz-toggle" data-command="ui:viz-mode" aria-pressed="false" aria-label="Визуализация" title="Режим визуализации (V)">
-          <span class="viz-btn__ico" aria-hidden="true">🌌</span>
-          <span class="viz-btn__label">Визуализация</span>
-        </button>
         <div class="status-bar">
           <span class="badge" id="network-badge" data-state="pending" title="Состояние сети">
             <span class="badge__dot" aria-hidden="true"></span>
@@ -134,6 +130,10 @@
           </span>
           <span class="badge" id="stream-status" data-state="idle" role="status" aria-live="polite">Готов к запуску</span>
         </div>
+        <button class="nav-btn viz-btn" type="button" id="viz-toggle" data-command="ui:viz-mode" aria-pressed="false" aria-label="Визуализация" title="Режим визуализации (V)">
+          <span class="viz-btn__ico" aria-hidden="true">🌌</span>
+          <span class="viz-btn__label">Визуализация</span>
+        </button>
         <button class="nav-toggle" type="button" id="nav-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="Открыть меню">
           <span class="nav-toggle__bars" aria-hidden="true"><span></span><span></span><span></span></span>
         </button>
