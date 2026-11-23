@@ -476,7 +476,8 @@ document.querySelector("#stations-list").appendChild(row);
 
 **Health** (`services/health.js`):
 - каждый URL проверяется `<audio preload="metadata">` **без** `crossOrigin`;
-- пул 6 воркеров, таймаут 6 с;
+- пул 10 воркеров, таймаут 6 с; одинаковые URL разных станций проверяются
+  один раз (дедупликация), станции без адресов завершаются сразу;
 - прогресс: `done/total` по источникам и `stationsDone/stationsTotal` по станциям;
 - результат станции: `{primary: Probe, fallbacks: Probe[], checkedAt}`;
 - автораз в 90 с (только видимая вкладка), вручную — `MR.health.run({manual:true})`;

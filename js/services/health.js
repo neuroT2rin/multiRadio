@@ -144,6 +144,8 @@
     let done = 0;
     let stationsDone = 0;
     const perStation = new Map();
+    /** Одинаковые адреса разных станций проверяем один раз. */
+    const uniqueUrls = new Map();
 
     stations.forEach(function (station) {
       const urls = store.getStationUrls(station);
@@ -153,46 +155,65 @@
         results: new Array(urls.length).fill(null),
         remaining: urls.length,
       });
+      urls.forEach(function (url) {
+        if (!uniqueUrls.has(url)) uniqueUrls.set(url, url);
+      });
     });
+
+    const totalToProbe = uniqueUrls.size;
 
     store.setHealthProgress({
       running: true,
       done: 0,
-      total: totalUrls,
+      total: totalToProbe,
       stationsDone: 0,
       stationsTotal: stations.length,
       startedAt: startedAt,
       finishedAt: 0,
     });
 
+    // Станции без адресов завершаем сразу — их нечем проверять.
+    perStation.forEach(function (entry, stationId) {
+      if (entry.remaining > 0) return;
+      stationsDone += 1;
+      store.setHealth(stationId, {
+        primary: { ok: false, reason: "no-url" },
+        fallbacks: [],
+        checkedAt: Date.now(),
+      });
+    });
+
     const tasks = [];
 
-    stations.forEach(function (station) {
-      const entry = perStation.get(station.id);
+    uniqueUrls.forEach(function (url) {
+      tasks.push(async function () {
+        const result = await probeUrl(url);
+        done += 1;
 
-      entry.urls.forEach(function (url, index) {
-        tasks.push(async function () {
-          const result = await probeUrl(url);
-          entry.results[index] = result;
-          done += 1;
-          entry.remaining -= 1;
+        perStation.forEach(function (entry, stationId) {
+          let matched = false;
+          entry.urls.forEach(function (stationUrl, index) {
+            if (stationUrl !== url) return;
+            entry.results[index] = result;
+            entry.remaining -= 1;
+            matched = true;
+          });
+          if (!matched) return;
 
-          let completedStation = null;
           if (entry.remaining === 0) {
             stationsDone += 1;
-            completedStation = {
+            store.setHealth(stationId, {
               primary: entry.results[0] || { ok: false, reason: "no-url" },
               fallbacks: entry.results.slice(1).filter(Boolean),
               checkedAt: Date.now(),
-            };
-            store.setHealth(station.id, completedStation);
+            });
           }
+        });
 
-          store.setHealthProgress({
-            done: done,
-            total: totalUrls,
-            stationsDone: stationsDone,
-          });
+        store.setHealthProgress({
+          done: done,
+          total: totalToProbe,
+          stationsDone: stationsDone,
         });
       });
     });
@@ -211,8 +232,8 @@
     store.setHealthBatch(results);
     store.setHealthProgress({
       running: false,
-      done: totalUrls,
-      total: totalUrls,
+      done: totalToProbe,
+      total: totalToProbe,
       stationsDone: stations.length,
       stationsTotal: stations.length,
       startedAt: startedAt,
@@ -246,7 +267,7 @@
     // Небольшая задержка, чтобы интерфейс успел отрисоваться.
     startTimer = setTimeout(function () {
       run({ manual: false });
-    }, 700);
+    }, 250);
 
     schedule();
 
