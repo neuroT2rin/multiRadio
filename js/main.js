@@ -74,6 +74,7 @@
     MR.statsUI.init();
     MR.sleepTimer.init();
     MR.voiceSearch.init();
+    MR.themeUI.init();
     MR.visualizer.init();
 
     // 4. Проверка станций — последней, чтобы интерфейс уже был готов.

@@ -767,3 +767,93 @@ input[type="range"].range:focus-visible {
     font-size: 1.1rem;
   }
 }
+
+/* ==========================================================================
+   Светлая тема — плеер, станции, эквалайзер
+   ========================================================================== */
+
+html[data-theme="light"] .player-art {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(11, 120, 168, 0.18), transparent 62%),
+    radial-gradient(circle at 75% 80%, rgba(109, 79, 216, 0.16), transparent 60%),
+    #eef5fd;
+  border-color: rgba(11, 120, 168, 0.26);
+  box-shadow: inset 0 0 28px rgba(11, 120, 168, 0.06), 0 10px 26px rgba(20, 40, 70, 0.12);
+}
+
+html[data-theme="light"] .player-art__emoji {
+  filter: drop-shadow(0 4px 10px rgba(20, 40, 70, 0.18));
+}
+
+html[data-theme="light"] input[type="range"].range {
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0 var(--range-progress, 80%),
+    rgba(20, 40, 70, 0.14) var(--range-progress, 80%) 100%
+  );
+}
+
+html[data-theme="light"] input[type="range"].range::-webkit-slider-thumb {
+  background: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(11, 120, 168, 0.14);
+}
+
+html[data-theme="light"] .mini-visualizer {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(11, 120, 168, 0.05));
+}
+
+html[data-theme="light"] .mini-visualizer canvas {
+  filter: brightness(0.72) saturate(1.15);
+}
+
+html[data-theme="light"] .view-tabs,
+html[data-theme="light"] .view-switch {
+  background: rgba(20, 40, 70, 0.05);
+}
+
+html[data-theme="light"] .view-tab:hover,
+html[data-theme="light"] .view-switch__btn:hover {
+  background: rgba(20, 40, 70, 0.06);
+}
+
+html[data-theme="light"] .view-tab[aria-selected="true"] {
+  color: #ffffff;
+  background: linear-gradient(135deg, #0b78a8, #4aa3d8);
+}
+
+html[data-theme="light"] .voice-live {
+  background: var(--accent-softer);
+}
+
+html[data-theme="light"] .station-row {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="light"] .station-row:hover {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .station-row.is-active {
+  background: linear-gradient(90deg, rgba(11, 120, 168, 0.12), rgba(11, 120, 168, 0.02));
+}
+
+html[data-theme="light"] .station-row__emoji {
+  background: rgba(20, 40, 70, 0.05);
+}
+
+html[data-theme="light"] .eq-preset {
+  background: rgba(20, 40, 70, 0.04);
+}
+
+html[data-theme="light"] .eq-controls {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+html[data-theme="light"] .eq-meter {
+  background: rgba(20, 40, 70, 0.08);
+}
+
+html[data-theme="light"] .health-dot {
+  box-shadow: 0 0 0 3px rgba(20, 40, 70, 0.05);
+}

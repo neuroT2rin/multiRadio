@@ -364,6 +364,18 @@ async function main() {
   await screenshot("settings.png");
   await evaluate(`document.querySelector('#modal-settings [data-close-modal]').click()`);
 
+  // Светлая тема: переключение и возврат
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  await sleep(350);
+  results.theme = await evaluate(`(() => ({
+    theme: document.documentElement.dataset.theme,
+    pressed: document.querySelector('#theme-toggle').getAttribute('aria-pressed'),
+    cardBg: getComputedStyle(document.querySelector('.card')).backgroundImage.includes('255, 255, 255'),
+  }))()`);
+  await screenshot("light.png");
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  results.themeBack = await evaluate(`document.documentElement.dataset.theme`);
+
   // Голосовой поиск: локальный матчер без микрофона
   results.voiceSearch = await evaluate(`(() => ({
     supported: MR.voiceSearch.supported,
@@ -431,6 +443,12 @@ async function main() {
     };
   })()`);
   await screenshot("playing.png");
+
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  await sleep(300);
+  await screenshot("light-playing.png");
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  await sleep(200);
 
   results.plan = await evaluate(`(() => ({
     now: (document.querySelector('#plan-now .plan-now__name') || {}).textContent || '',

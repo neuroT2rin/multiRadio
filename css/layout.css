@@ -637,3 +637,85 @@ body.is-viz-mode .viz-btn {
     font-size: 0.66rem;
   }
 }
+
+/* Кнопка темы: в полноэкранной визуализации она тоже скрыта. */
+body.is-viz-mode .theme-btn {
+  display: none;
+}
+
+/* ==========================================================================
+   Светлая тема — каркас
+   ========================================================================== */
+
+html[data-theme="light"] .app-header {
+  background: rgba(255, 255, 255, 0.82);
+  border-bottom-color: var(--border);
+}
+
+html[data-theme="light"] .brand {
+  color: var(--text);
+}
+
+html[data-theme="light"] .brand__mark {
+  background:
+    linear-gradient(140deg, rgba(11, 120, 168, 0.14), rgba(109, 79, 216, 0.1)),
+    #ffffff;
+  border-color: rgba(11, 120, 168, 0.28);
+  box-shadow: inset 0 0 18px rgba(11, 120, 168, 0.08);
+}
+
+html[data-theme="light"] .nav-btn:hover {
+  background: rgba(20, 40, 70, 0.06);
+}
+
+html[data-theme="light"] .nav-group.is-open > .nav-btn {
+  background: rgba(20, 40, 70, 0.06);
+}
+
+html[data-theme="light"] .nav-menu {
+  background: rgba(255, 255, 255, 0.99);
+}
+
+html[data-theme="light"] .nav-item:hover {
+  background: var(--accent-softer);
+}
+
+html[data-theme="light"] .health-progress {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+html[data-theme="light"] .health-progress__track {
+  background: rgba(20, 40, 70, 0.1);
+}
+
+html[data-theme="light"] .app-footer {
+  background: linear-gradient(180deg, transparent, rgba(228, 237, 248, 0.7));
+}
+
+html[data-theme="light"] .viz-btn {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: var(--border);
+}
+
+html[data-theme="light"] .viz-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: rgba(11, 120, 168, 0.45);
+}
+
+html[data-theme="light"] .theme-btn {
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .theme-btn:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 1080px) {
+  html[data-theme="light"] .main-nav {
+    background: rgba(255, 255, 255, 0.99);
+  }
+
+  html[data-theme="light"] body.nav-open::after {
+    background: rgba(15, 28, 48, 0.35);
+  }
+}

@@ -6,6 +6,20 @@
   <title>MultiRadio — многофункциональное интернет-радио</title>
   <meta name="description" content="Интернет-радио с резервными источниками, 10-полосным эквалайзером, группами станций и живой визуализацией звука." />
   <meta name="theme-color" content="#060a14" />
+  <script>
+    // Тема применяется до отрисовки, чтобы не было вспышки тёмного фона.
+    (function () {
+      try {
+        var raw = localStorage.getItem("multiradio:state:v2");
+        if (!raw) return;
+        var saved = JSON.parse(raw);
+        if (saved && saved.ui && saved.ui.theme === "light") {
+          document.documentElement.dataset.theme = "light";
+          document.documentElement.style.colorScheme = "light";
+        }
+      } catch (error) { /* некорректный localStorage — остаёмся на тёмной */ }
+    })();
+  </script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%BB%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/layout.css" />
@@ -153,6 +167,9 @@
       </nav>
 
       <div class="header-meta">
+        <button class="icon-btn theme-btn" type="button" id="theme-toggle" data-command="ui:theme" aria-pressed="false" aria-label="Включить светлую тему" title="Светлая тема">
+          <span id="theme-icon" aria-hidden="true">☀</span>
+        </button>
         <div class="status-bar">
           <span class="badge" id="network-badge" data-state="pending" title="Состояние сети">
             <span class="badge__dot" aria-hidden="true"></span>
@@ -649,6 +666,7 @@
   <script src="js/ui/stats.js"></script>
   <script src="js/ui/sleep-timer.js"></script>
   <script src="js/ui/voice-search.js"></script>
+  <script src="js/ui/theme.js"></script>
   <!-- Визуализация -->
   <script src="js/visualizer/mini.js"></script>
   <script src="js/visualizer/background.js"></script>

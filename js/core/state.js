@@ -67,6 +67,7 @@
         mode: "spectrum",
         miniMode: "wave",
         stationView: "list",
+        theme: "dark",
         compatMode: false,
       },
 
@@ -312,6 +313,7 @@
     const mode = config.visualizerModes.indexOf(ui.mode) !== -1 ? ui.mode : "spectrum";
     const miniMode = config.miniVisualizerModes.indexOf(ui.miniMode) !== -1 ? ui.miniMode : "wave";
     const stationView = config.stationViews.indexOf(ui.stationView) !== -1 ? ui.stationView : "list";
+    const theme = config.themes.indexOf(ui.theme) !== -1 ? ui.theme : "dark";
 
     state.stations = stations;
     state.groups = groups;
@@ -326,6 +328,7 @@
       mode: mode,
       miniMode: miniMode,
       stationView: stationView,
+      theme: theme,
       compatMode: Boolean(ui.compatMode),
     };
     state.filters = { favoritesOnly: false, groupId: null, query: "" };
@@ -390,6 +393,7 @@
         mode: state.ui.mode,
         miniMode: state.ui.miniMode,
         stationView: state.ui.stationView,
+        theme: state.ui.theme,
         compatMode: state.ui.compatMode,
       },
     };
@@ -969,6 +973,14 @@
     return view;
   }
 
+  function setTheme(theme) {
+    if (config.themes.indexOf(theme) === -1) return state.ui.theme;
+    state.ui = Object.assign({}, state.ui, { theme: theme });
+    emit("ui");
+    save();
+    return theme;
+  }
+
   function setCompatMode(enabled) {
     state.ui = Object.assign({}, state.ui, { compatMode: Boolean(enabled) });
     emit("ui");
@@ -1106,6 +1118,7 @@
     setVisualizerMode: setVisualizerMode,
     setMiniMode: setMiniMode,
     setStationView: setStationView,
+    setTheme: setTheme,
     setCompatMode: setCompatMode,
 
     exportData: exportData,

@@ -14,6 +14,7 @@
 
     views: ["stations", "favorites", "equalizer"],
     stationViews: ["list", "grid"],
+    themes: ["dark", "light"],
     visualizerModes: ["spectrum", "aurora", "orbit", "tunnel", "spiral"],
     /** Режимы компактной визуализации потока в плеере. */
     miniVisualizerModes: ["wave", "ribbon", "sparkle"],

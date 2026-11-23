@@ -115,7 +115,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 → analyser → audio → network → health → stats
 → toast → modal → commands → views → nav → header → player → stations → groups
 → plan → equalizer → station-form → settings → info → stats → sleep-timer → voice-search
-→ visualizer/mini → visualizer/background → visualizer/index → main
+→ theme → visualizer/mini → visualizer/background → visualizer/index → main
 ```
 
 Зависимости направлены **вниз**: `ui/` и `visualizer/` знают о `core/` и
@@ -157,6 +157,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/sleep-timer.js` | Таймер сна в шапке: отсчёт и остановка радио | `init`, `start(minutes)`, `cancel`, `dispose`, `remainingMs` |
 | `js/ui/voice-search.js` | Голосовой подбор станции (Web Speech API + локальный матчер) | `init`, `start`, `stop`, `match(text)`, `supported`, `dispose` |
 | `js/ui/stats.js` | Панель статистики: станции и жанры | `init`, `render` |
+| `js/ui/theme.js` | Светлая/тёмная тема: `data-theme` на `<html>`, кнопка в шапке | `init`, `apply` |
 | `js/visualizer/mini.js` | Визуализация потока в плеере (3 режима) | `init`, `draw(analysis)`, `drawIdle`, `setMode`, `mode`, `resize`, `dispose` |
 | `js/visualizer/background.js` | Полноэкранный canvas, режимы | `init`, `draw(analysis, dt, now)`, `resize`, `setMode`, `mode` |
 | `js/visualizer/index.js` | Единственный rAF-цикл, синхронизация UI и режим визуализации | `init`, `dispose`, `setVizMode(bool)`, `isVizMode()` |
@@ -200,7 +201,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
   ui: { bgEnabled,
         mode: 'spectrum'|'aurora'|'orbit'|'tunnel'|'spiral',
         miniMode: 'wave'|'ribbon'|'sparkle',
-        stationView: 'list'|'grid', compatMode }
+        stationView: 'list'|'grid', theme: 'dark'|'light', compatMode }
 }
 ```
 
@@ -218,7 +219,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | Фильтры | `setFilters({favoritesOnly?, groupId?, query?})`, `clearFilters()` |
 | Плеер/звук | `setPlayback(patch)`, `setVolume(0..1)`, `toggleMute()`, `setEqGain(i, дБ)`, `setEqGains(arr)`, `applyEqPreset(key)`, `resetEq()` |
 | Проверка | `setHealth(id, result)`, `setHealthBatch(map)`, `setHealthProgress(patch)` |
-| Сеть/вид | `setNetwork(patch)`, `setView(view)`, `setBgEnabled(bool)`, `toggleBg()`, `setVisualizerMode(mode)`, `setMiniMode(mode)`, `setStationView('list'\|'grid')`, `setCompatMode(bool)` |
+| Сеть/вид | `setNetwork(patch)`, `setView(view)`, `setBgEnabled(bool)`, `toggleBg()`, `setVisualizerMode(mode)`, `setMiniMode(mode)`, `setStationView('list'\|'grid')`, `setTheme('dark'\|'light')`, `setCompatMode(bool)` |
 | Данные | `exportData() → v2-объект`, `importData(obj) → {ok, counts\|error}`, `resetAll()`, `restoreDefaultStations()` |
 
 ### 5.3 Входные данные
@@ -268,7 +269,7 @@ payload**. Обработчик обязан делать `payload = payload || 
   stations: [{ id, name, genre, bitrate, emoji, primary, fallbacks }],
   favorites: [id], groups: [{ id, name, stationIds }],
   volume, muted, eq: { gains: [10], preset }, view,
-  ui: { bgEnabled, mode, miniMode, stationView, compatMode }
+  ui: { bgEnabled, mode, miniMode, stationView, theme, compatMode }
 }
 ```
 
@@ -303,6 +304,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 | `timer:start`, `timer:cancel` | `ui/sleep-timer.js` |
 | `search:voice` | `ui/voice-search.js` |
 | `stats:reset` | `ui/stats.js` |
+| `ui:theme` | `ui/theme.js` |
 | `settings:open`, `settings:export`, `settings:import`, `settings:reset`, `settings:restore-stations` | `ui/settings.js` |
 | `ui:toggle-bg`, `ui:mode`, `ui:mini-mode`, `ui:viz-mode` | `visualizer/index.js` |
 
@@ -345,9 +347,10 @@ document.querySelector("#stations-list").appendChild(row);
 Разметка — `index.html` (≈580 строк). Часто используемые id:
 
 ```text
-Шапка:    app-header, main-nav, nav-toggle, viz-toggle, sleep-timer,
-          sleep-timer-label, network-badge, network-badge-text, stream-status,
-          health-progress, health-progress-fill, health-progress-label
+Шапка:    app-header, main-nav, nav-toggle, viz-toggle, theme-toggle,
+          theme-icon, sleep-timer, sleep-timer-label, network-badge,
+          network-badge-text, stream-status, health-progress,
+          health-progress-fill, health-progress-label
 Плеер:    station-name, station-genre, station-bitrate-chip, station-source-chip,
           player-art-emoji, play-pause-btn, play-pause-icon, stop-btn, prev-btn,
           next-btn, volume, volume-value, mute-btn, mute-icon, mini-canvas, mini-hint
@@ -405,6 +408,11 @@ document.querySelector("#stations-list").appendChild(row);
 `--radius-*`, `--header-height`) — только `base.css`. Не хардкодить цвета в
 компонентах, если есть токен. Исключение: градиенты Canvas — они заданы
 константами в `mini.js`/`background.js`.
+
+**Темы:** `html[data-theme="light"]` переопределяет токены в `base.css` и
+добавляет блок в конце каждого css-файла (компоненты, каркас, плеер, фон).
+Новый компонент со своим `background` обязан получить пару в светлом блоке,
+иначе он останется тёмным. Canvas в светлой теме инвертируется фильтром.
 
 **Прозрачность панелей:** `.card` намеренно полупрозрачный
 (градиент `rgba(17,28,46,0.76)` → `rgba(9,16,28,0.82)` + `blur(16px)`), чтобы
@@ -531,6 +539,7 @@ VPN точно определить нельзя — не обещать это�
 | Голосовой подбор станции | `ui/voice-search.js`, `index.html` (toolbar) | те же | `MR.voiceSearch.match()`, микрофон, fallback |
 | Статистика прослушивания | `services/stats.js`, `ui/stats.js` | те же + `index.html` (сайдбар) | включить радио, подождать, панель |
 | План эфира | `ui/plan.js`, `index.html` (под «Источники и сеть») | те же | текущая станция + 3 следующие |
+| Светлая тема | `ui/theme.js`, `css/base.css` (токены), блоки `html[data-theme="light"]` во всех css | те же + `state.js` | переключение, reload, контраст |
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
