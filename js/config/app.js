@@ -8,11 +8,11 @@
   const MR = (global.MR = global.MR || {});
 
   MR.config = {
-    version: "2.1.0",
+    version: "2.2.0",
     storageKey: "multiradio:state:v2",
 
     views: ["stations", "favorites", "equalizer"],
-    visualizerModes: ["spectrum", "aurora", "orbit"],
+    visualizerModes: ["spectrum", "aurora", "orbit", "tunnel", "spiral"],
     /** Режимы компактной визуализации потока в плеере. */
     miniVisualizerModes: ["wave", "ribbon", "sparkle"],
 

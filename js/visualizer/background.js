@@ -15,7 +15,7 @@
   const MR = (global.MR = global.MR || {});
   const utils = MR.utils;
 
-  const MODES = ["spectrum", "aurora", "orbit"];
+  const MODES = ["spectrum", "aurora", "orbit", "tunnel", "spiral"];
   const PARTICLE_COUNT = 64;
   const STAR_COUNT = 90;
 
@@ -425,6 +425,137 @@
     }
   }
 
+  function drawTunnel(analysis, now, hue, energy, idle) {
+    const cx = width / 2;
+    const cy = height * 0.5;
+    const level = idle ? 0 : utils.clamp(analysis.level, 0, 1);
+    const bass = idle ? 0 : utils.clamp(analysis.bass, 0, 1);
+    const treble = idle ? 0 : utils.clamp(analysis.treble, 0, 1);
+    const maxRadius = Math.hypot(width, height) * 0.55;
+    const ringCount = 30;
+    const speed = 0.00005 + level * 0.00016 + bass * 0.00007;
+    const offset = (now * speed) % 1;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    // Спицы туннеля — задают перспективу.
+    for (let i = 0; i < 28; i += 1) {
+      const angle = (i / 28) * Math.PI * 2 + now * 0.00002;
+      ctx.beginPath();
+      ctx.moveTo(
+        cx + Math.cos(angle) * maxRadius * 0.04,
+        cy + Math.sin(angle) * maxRadius * 0.04
+      );
+      ctx.lineTo(cx + Math.cos(angle) * maxRadius, cy + Math.sin(angle) * maxRadius);
+      ctx.strokeStyle = hsla(hue + 20, 85, 58, 0.025 + energy * 0.035);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Кольца, летящие из глубины на зрителя.
+    for (let i = 0; i < ringCount; i += 1) {
+      const p = (i / ringCount + offset) % 1;
+      const radius = maxRadius * Math.pow(p, 2.3);
+      if (radius < 1.5) continue;
+
+      const depth = 1 - p;
+      const alpha = Math.pow(depth, 0.6) * (0.1 + energy * 0.24) * (0.35 + p);
+      const wobble = 1 + bass * 0.015 * Math.sin(now * 0.0024 + i * 0.9);
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * wobble, 0, Math.PI * 2);
+      ctx.strokeStyle = hsla(hue + p * 90 + treble * 20, 92, 64, Math.min(1, alpha));
+      ctx.lineWidth = 0.7 + p * 3.4;
+      ctx.stroke();
+    }
+
+    // Свечение в центре туннеля.
+    const glowRadius = maxRadius * (0.16 + level * 0.08 + beatFlash * 0.03);
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
+    glow.addColorStop(0, hsla(hue + 50, 95, 74, 0.3 + energy * 0.3));
+    glow.addColorStop(0.45, hsla(hue + 25, 90, 62, 0.1 + energy * 0.1));
+    glow.addColorStop(1, hsla(hue, 90, 55, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    if (beatFlash > 0.02) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, maxRadius * (0.55 + (1 - beatFlash) * 0.4), 0, Math.PI * 2);
+      ctx.strokeStyle = hsla(hue + 50, 95, 72, beatFlash * 0.2);
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+    }
+  }
+
+  function drawSpiral(analysis, now, hue, energy, idle) {
+    const cx = width / 2;
+    const cy = height * 0.5;
+    const base = Math.min(width, height);
+    const level = idle ? 0 : utils.clamp(analysis.level, 0, 1);
+    const bass = idle ? 0 : utils.clamp(analysis.bass, 0, 1);
+    const treble = idle ? 0 : utils.clamp(analysis.treble, 0, 1);
+    const maxRadius = base * 0.45;
+    const arms = 4;
+    const dots = 120;
+    const spin = now * (0.00004 + treble * 0.00014) + rotation * 0.6;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    // Спиральные рукава из светящихся точек.
+    for (let arm = 0; arm < arms; arm += 1) {
+      const armOffset = (Math.PI * 2 * arm) / arms;
+
+      for (let i = 0; i < dots; i += 1) {
+        const t = i / (dots - 1);
+        const radius = maxRadius * (0.06 + t * 0.98) * (1 + level * 0.05) *
+          (1 + bass * 0.01 * Math.sin(i * 0.5 + now * 0.002));
+        const angle = armOffset + t * 2.8 + spin;
+        const x = cx + Math.cos(angle) * radius;
+        const y = cy + Math.sin(angle) * radius * 0.7;
+        const alpha = (0.06 + energy * 0.34) * Math.pow(1 - t, 0.55);
+        const size = 0.5 + Math.pow(1 - t, 1.4) * 2.4 + level * 1.1;
+
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fillStyle = hsla(hue + t * 110 + arm * 14, 92, 68, Math.min(1, alpha));
+        ctx.fill();
+      }
+    }
+
+    drawCoreGlow(cx, cy, base * (0.05 + level * 0.04), hue, energy);
+
+    const coreRadius = base * (0.06 + level * 0.05 + beatFlash * 0.02);
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius);
+    core.addColorStop(0, hsla(hue + 30, 95, 76, Math.min(1, 0.6 + energy * 0.3)));
+    core.addColorStop(0.55, hsla(hue + 10, 92, 62, 0.2 + energy * 0.2));
+    core.addColorStop(1, hsla(hue, 90, 55, 0));
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    if (beatFlash > 0.02) {
+      ctx.beginPath();
+      ctx.ellipse(
+        cx, cy,
+        base * (0.3 + (1 - beatFlash) * 0.2),
+        base * 0.2,
+        0, 0, Math.PI * 2
+      );
+      ctx.strokeStyle = hsla(hue + 60, 95, 72, beatFlash * 0.16);
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    }
+  }
+
   function draw(analysis, dtMs, now) {
     if (!ctx) return;
     if (!width || !height) {
@@ -461,6 +592,10 @@
       drawAurora(analysis, now, hue, energy, idle);
     } else if (mode === "orbit") {
       drawOrbit(analysis, now, hue, energy, idle);
+    } else if (mode === "tunnel") {
+      drawTunnel(analysis, now, hue, energy, idle);
+    } else if (mode === "spiral") {
+      drawSpiral(analysis, now, hue, energy, idle);
     } else {
       drawSpectrum(analysis, now, hue, energy, idle);
     }

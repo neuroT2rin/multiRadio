@@ -79,6 +79,12 @@
             <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="ui:mode" data-mode="orbit">
               <span class="nav-item__ico" aria-hidden="true">🪐</span> Орбиты
             </button>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="ui:mode" data-mode="tunnel">
+              <span class="nav-item__ico" aria-hidden="true">🕳</span> Туннель
+            </button>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="ui:mode" data-mode="spiral">
+              <span class="nav-item__ico" aria-hidden="true">🌀</span> Спираль
+            </button>
             <div class="nav-divider"></div>
             <p class="nav-menu__label">Визуализация потока</p>
             <button class="nav-item" type="button" role="menuitemradio" aria-checked="true" data-command="ui:mini-mode" data-mini-mode="wave">
@@ -478,12 +484,14 @@
           <label class="settings-row" for="setting-mode">
             <span class="settings-row__text">
               <span class="settings-row__title">Режим визуализации</span>
-              <span class="settings-row__hint">Круговой спектр, аврора или орбиты.</span>
+              <span class="settings-row__hint">Круговой спектр, аврора, орбиты, туннель или спираль.</span>
             </span>
             <select class="input input--compact" id="setting-mode">
               <option value="spectrum">Круговой спектр</option>
               <option value="aurora">Аврора</option>
               <option value="orbit">Орбиты</option>
+              <option value="tunnel">Туннель</option>
+              <option value="spiral">Спираль</option>
             </select>
           </label>
           <label class="settings-row" for="setting-compat">
@@ -513,7 +521,7 @@
         <section class="settings-section" aria-labelledby="settings-about">
           <h3 class="settings-section__title" id="settings-about">О приложении</h3>
           <dl class="settings-list">
-            <div><dt>Версия</dt><dd id="settings-version">2.1.0</dd></div>
+            <div><dt>Версия</dt><dd id="settings-version">2.2.0</dd></div>
             <div><dt>Локальное хранилище</dt><dd id="settings-storage">—</dd></div>
             <div><dt>Технологии</dt><dd>HTML, CSS, Web Audio API, Canvas 2D</dd></div>
           </dl>

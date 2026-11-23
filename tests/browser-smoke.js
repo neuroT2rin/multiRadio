@@ -272,6 +272,35 @@ async function main() {
     };
   })()`);
 
+  // Фоновые режимы: каждая ветка background.js рисует пиксели.
+  results.bgModes = await evaluate(`(() => {
+    const modes = MR.config.visualizerModes.slice();
+    const fake = {
+      active: true, silent: false, level: 0.5, bass: 0.4, treble: 0.35, beat: false,
+      spectrum: Array.from({ length: 64 }, (_, i) => 0.3 + 0.4 * Math.abs(Math.sin(i * 0.3))),
+      wave: new Uint8Array(1024).fill(128),
+    };
+    const canvas = document.querySelector('#bg-canvas');
+    const ctx = canvas.getContext('2d');
+    const drawn = {};
+
+    modes.forEach((mode) => {
+      MR.store.setVisualizerMode(mode);
+      MR.bg.draw(fake, 16, performance.now());
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let count = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 0) count += 1;
+      drawn[mode] = count;
+    });
+
+    MR.store.setVisualizerMode('spectrum');
+    return {
+      drawn: drawn,
+      menuItems: document.querySelectorAll('.nav-item[data-mode]').length,
+      settingsOptions: document.querySelectorAll('#setting-mode option').length,
+    };
+  })()`);
+
   // Режим визуализации: страница скрыта, остаются «Вид» и «Визуализация».
   results.vizMode = await evaluate(`(() => {
     document.querySelector('#viz-toggle').click();
