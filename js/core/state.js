@@ -62,7 +62,13 @@
 
       network: { online: true, status: "checking", effectiveType: "", downlink: null },
 
-      ui: { bgEnabled: true, mode: "spectrum", miniMode: "wave", compatMode: false },
+      ui: {
+        bgEnabled: true,
+        mode: "spectrum",
+        miniMode: "wave",
+        stationView: "list",
+        compatMode: false,
+      },
 
       loadedAt: Date.now(),
     };
@@ -305,6 +311,7 @@
     const view = config.views.indexOf(payload.view) !== -1 ? payload.view : "stations";
     const mode = config.visualizerModes.indexOf(ui.mode) !== -1 ? ui.mode : "spectrum";
     const miniMode = config.miniVisualizerModes.indexOf(ui.miniMode) !== -1 ? ui.miniMode : "wave";
+    const stationView = config.stationViews.indexOf(ui.stationView) !== -1 ? ui.stationView : "list";
 
     state.stations = stations;
     state.groups = groups;
@@ -318,6 +325,7 @@
       bgEnabled: ui.bgEnabled !== false,
       mode: mode,
       miniMode: miniMode,
+      stationView: stationView,
       compatMode: Boolean(ui.compatMode),
     };
     state.filters = { favoritesOnly: false, groupId: null, query: "" };
@@ -381,6 +389,7 @@
         bgEnabled: state.ui.bgEnabled,
         mode: state.ui.mode,
         miniMode: state.ui.miniMode,
+        stationView: state.ui.stationView,
         compatMode: state.ui.compatMode,
       },
     };
@@ -952,6 +961,14 @@
     return mode;
   }
 
+  function setStationView(view) {
+    if (config.stationViews.indexOf(view) === -1) return state.ui.stationView;
+    state.ui = Object.assign({}, state.ui, { stationView: view });
+    emit("ui");
+    save();
+    return view;
+  }
+
   function setCompatMode(enabled) {
     state.ui = Object.assign({}, state.ui, { compatMode: Boolean(enabled) });
     emit("ui");
@@ -1088,6 +1105,7 @@
     toggleBg: toggleBg,
     setVisualizerMode: setVisualizerMode,
     setMiniMode: setMiniMode,
+    setStationView: setStationView,
     setCompatMode: setCompatMode,
 
     exportData: exportData,

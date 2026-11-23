@@ -146,7 +146,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/nav.js` | Выпадающие меню, keyboard, mobile drawer, галочки | `init`, `closeAll` |
 | `js/ui/header.js` | Бейджи сети/плеера, прогресс проверки, `document.title` | `init` |
 | `js/ui/player.js` | Карточка «сейчас играет», управление, громкость, `Space` | `init`, `render` |
-| `js/ui/stations.js` | Списки станций/избранного, поиск, фильтры, точки здоровья | `init`, `render` |
+| `js/ui/stations.js` | Списки станций/избранного, поиск, фильтры, вид «список/плитка», точки здоровья | `init`, `render` |
 | `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой) | `init`, `render`, `openEditor(groupId)` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
@@ -194,7 +194,8 @@ utils → config/app → config/stations → config/equalizer → storage → st
 
   ui: { bgEnabled,
         mode: 'spectrum'|'aurora'|'orbit'|'tunnel'|'spiral',
-        miniMode: 'wave'|'ribbon'|'sparkle', compatMode }
+        miniMode: 'wave'|'ribbon'|'sparkle',
+        stationView: 'list'|'grid', compatMode }
 }
 ```
 
@@ -212,7 +213,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | Фильтры | `setFilters({favoritesOnly?, groupId?, query?})`, `clearFilters()` |
 | Плеер/звук | `setPlayback(patch)`, `setVolume(0..1)`, `toggleMute()`, `setEqGain(i, дБ)`, `setEqGains(arr)`, `applyEqPreset(key)`, `resetEq()` |
 | Проверка | `setHealth(id, result)`, `setHealthBatch(map)`, `setHealthProgress(patch)` |
-| Сеть/вид | `setNetwork(patch)`, `setView(view)`, `setBgEnabled(bool)`, `toggleBg()`, `setVisualizerMode(mode)`, `setMiniMode(mode)`, `setCompatMode(bool)` |
+| Сеть/вид | `setNetwork(patch)`, `setView(view)`, `setBgEnabled(bool)`, `toggleBg()`, `setVisualizerMode(mode)`, `setMiniMode(mode)`, `setStationView('list'\|'grid')`, `setCompatMode(bool)` |
 | Данные | `exportData() → v2-объект`, `importData(obj) → {ok, counts\|error}`, `resetAll()`, `restoreDefaultStations()` |
 
 ### 5.3 Входные данные
@@ -262,7 +263,7 @@ payload**. Обработчик обязан делать `payload = payload || 
   stations: [{ id, name, genre, bitrate, emoji, primary, fallbacks }],
   favorites: [id], groups: [{ id, name, stationIds }],
   volume, muted, eq: { gains: [10], preset }, view,
-  ui: { bgEnabled, mode, miniMode, compatMode }
+  ui: { bgEnabled, mode, miniMode, stationView, compatMode }
 }
 ```
 
@@ -285,7 +286,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 |---|---|
 | `view:stations`, `view:favorites`, `view:equalizer` | `ui/views.js` |
 | `station:add` | `ui/station-form.js` |
-| `station:edit`, `station:play`, `station:favorite`, `filter:favorites` | `ui/stations.js` |
+| `station:edit`, `station:play`, `station:favorite`, `filter:favorites`, `stations:view` | `ui/stations.js` |
 | `group:create`, `group:edit`, `group:delete`, `group:filter`, `group:clear-filter`, `group:remove-station`, `group:toggle` | `ui/groups.js` |
 | `playback:toggle`, `playback:stop`, `playback:next`, `playback:prev`, `playback:mute` | `ui/player.js` |
 | `eq:reset` | `ui/equalizer.js` |
@@ -378,7 +379,7 @@ document.querySelector("#stations-list").appendChild(row);
 | Прогресс | `.health-progress`, `.is-active`, `.health-progress__track`, `__fill`, `__label` |
 | Карточки | `.card`, `.content-grid`, `.content-main`, `.content-side`, `.section-head`, `.section-title` |
 | Кнопки | `.btn`, `.btn-primary`, `.btn-outline`, `.btn-ghost`, `.btn-danger`, `.btn-sm`, `.icon-btn`, `.icon-btn--sm` |
-| Станции | `.view-tabs`, `.view-tab`, `.toolbar`, `.stations-list`, `.station-row`, `.is-active`, `.station-row__main/__body/__name/__meta/__actions`, `.health-dot[data-health=online|fallback|offline|checking|unknown]` |
+| Станции | `.view-tabs`, `.view-tab`, `.toolbar`, `.view-switch`, `.view-switch__btn[aria-pressed]`, `.stations-list`, `.stations-list--grid`, `.station-row`, `.is-active`, `.station-row__main/__body/__name/__meta/__actions`, `.health-dot[data-health=online|fallback|offline|checking|unknown]` |
 | EQ | `.eq-controls`, `.eq-band`, `.eq-band__slider`, `.eq-meter__fill`, `.eq-preset[aria-pressed]` |
 | Группы | `.group-card`, `.is-filtered`, `.is-expanded`, `.group-card__head/__toggle/__chev/__stations/__actions`, `.group-station` |
 | Модалки | `.modal`, `.modal__backdrop/__panel/__header/__body/__footer` |

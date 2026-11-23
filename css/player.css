@@ -287,6 +287,42 @@ input[type="range"].range:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Переключатель «списком / плиткой» справа от поиска */
+.view-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(4, 8, 16, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.view-switch__btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  font-size: 0.88rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  transition: color 0.16s, background 0.16s;
+}
+
+.view-switch__btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.view-switch__btn[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 /* --------------------------------------------------------------------------
    Список станций
    -------------------------------------------------------------------------- */
@@ -303,6 +339,49 @@ input[type="range"].range:focus-visible {
 /* Строки не сжимаются, когда станций много: список прокручивается. */
 .stations-list > .station-row {
   flex: 0 0 auto;
+}
+
+/* Вид «плиткой»: те же карточки станций, но сеткой. */
+.stations-list--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(205px, 1fr));
+  gap: 9px;
+  max-height: 520px;
+}
+
+.stations-list--grid .station-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.stations-list--grid .station-row__main {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 13px 13px 4px;
+}
+
+.stations-list--grid .station-row__emoji {
+  width: 44px;
+  height: 44px;
+  font-size: 1.25rem;
+}
+
+.stations-list--grid .station-row__body {
+  width: 100%;
+}
+
+.stations-list--grid .station-row__name {
+  white-space: normal;
+}
+
+.stations-list--grid .station-row__meta {
+  white-space: normal;
+}
+
+.stations-list--grid .station-row__actions {
+  justify-content: flex-end;
+  padding: 2px 8px 9px;
 }
 
 .station-row {
@@ -637,5 +716,17 @@ input[type="range"].range:focus-visible {
 
   .eq-band {
     min-width: 42px;
+  }
+}
+
+@media (max-width: 520px) {
+  .stations-list--grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stations-list--grid .station-row__emoji {
+    width: 38px;
+    height: 38px;
+    font-size: 1.1rem;
   }
 }

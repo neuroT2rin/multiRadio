@@ -230,6 +230,21 @@ async function main() {
     hasNew: [...document.querySelectorAll('.station-row__name')].some(el => el.textContent.includes('Тестовая')),
   }))()`);
 
+  // Вид списка: плитка ↔ список
+  results.stationViews = await evaluate(`(() => {
+    const gridBtn = document.querySelector('[data-command="stations:view"][data-station-view="grid"]');
+    const listBtn = document.querySelector('[data-command="stations:view"][data-station-view="list"]');
+    gridBtn.click();
+    const grid = document.querySelector('#stations-list').classList.contains('stations-list--grid');
+    const gridPressed = gridBtn.getAttribute('aria-pressed');
+    listBtn.click();
+    return {
+      grid: grid,
+      gridPressed: gridPressed,
+      backToList: !document.querySelector('#stations-list').classList.contains('stations-list--grid'),
+    };
+  })()`);
+
   // Эквалайзер
   await evaluate(`document.querySelector('#tab-equalizer').click()`);
   await sleep(300);

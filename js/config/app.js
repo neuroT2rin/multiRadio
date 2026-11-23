@@ -12,6 +12,7 @@
     storageKey: "multiradio:state:v2",
 
     views: ["stations", "favorites", "equalizer"],
+    stationViews: ["list", "grid"],
     visualizerModes: ["spectrum", "aurora", "orbit", "tunnel", "spiral"],
     /** Режимы компактной визуализации потока в плеере. */
     miniVisualizerModes: ["wave", "ribbon", "sparkle"],

@@ -26,7 +26,19 @@
   let favoritesChip = null;
   let groupChip = null;
   let groupChipName = null;
+  let viewButtons = [];
   let renderQueued = false;
+
+  function applyViewMode() {
+    const isGrid = store.state.ui.stationView === "grid";
+    [list, favoritesList].forEach(function (node) {
+      if (!node) return;
+      node.classList.toggle("stations-list--grid", isGrid);
+    });
+    viewButtons.forEach(function (button) {
+      button.setAttribute("aria-pressed", String(button.dataset.stationView === store.state.ui.stationView));
+    });
+  }
 
   function healthInfo(station) {
     const health = store.getHealth(station.id);
@@ -195,6 +207,8 @@
       groupChip.hidden = !group;
       if (group) groupChipName.textContent = group.name;
     }
+
+    applyViewMode();
   }
 
   function scheduleRender() {
@@ -216,6 +230,7 @@
     favoritesChip = dom.$("#filter-favorites");
     groupChip = dom.$("#group-filter-chip");
     groupChipName = dom.$("#group-filter-name");
+    viewButtons = dom.$$(".view-switch__btn");
     if (!list) return;
 
     MR.commands.registerMany({
@@ -240,6 +255,10 @@
       "filter:favorites": function () {
         store.setFilters({ favoritesOnly: !store.state.filters.favoritesOnly });
       },
+      "stations:view": function (payload) {
+        const view = payload && payload.dataset ? payload.dataset.stationView : "";
+        if (view) store.setStationView(view);
+      },
     });
 
     if (searchInput) {
@@ -257,6 +276,7 @@
     store.on("filters", scheduleRender);
     store.on("playback", scheduleRender);
     store.on("health", scheduleRender);
+    store.on("ui", applyViewMode);
 
     render();
   }
