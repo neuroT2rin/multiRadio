@@ -55,6 +55,7 @@
         audio = new Audio();
         audio.preload = "metadata";
         audio.muted = true;
+        audio.volume = 0;
         audio.addEventListener("loadedmetadata", function () { finish(true, "metadata"); });
         audio.addEventListener("canplay", function () { finish(true, "canplay"); });
         audio.addEventListener("error", function () { finish(false, "media-error"); });
@@ -106,6 +107,7 @@
 
     const offline = global.navigator ? global.navigator.onLine === false : false;
     const startedAt = Date.now();
+    const playback = store.state.playback;
 
     running = true;
 
@@ -146,18 +148,37 @@
     const perStation = new Map();
     /** Одинаковые адреса разных станций проверяем один раз. */
     const uniqueUrls = new Map();
+    /** Адрес, который сейчас звучит, повторно не запрашиваем: второй запрос
+     *  к тому же потоку может оборвать вещание (ограничение сервера/браузера). */
+    const playingUrl = playback.isPlaying && playback.url ? playback.url : "";
 
     stations.forEach(function (station) {
       const urls = store.getStationUrls(station);
-      perStation.set(station.id, {
+      const entry = {
         station: station,
         urls: urls,
         results: new Array(urls.length).fill(null),
         remaining: urls.length,
-      });
-      urls.forEach(function (url) {
+      };
+      perStation.set(station.id, entry);
+
+      urls.forEach(function (url, index) {
+        if (url === playingUrl) {
+          entry.results[index] = { ok: true, reason: "now-playing" };
+          entry.remaining -= 1;
+          return;
+        }
         if (!uniqueUrls.has(url)) uniqueUrls.set(url, url);
       });
+
+      if (entry.remaining === 0 && urls.length > 0) {
+        stationsDone += 1;
+        store.setHealth(station.id, {
+          primary: entry.results[0] || { ok: false, reason: "no-url" },
+          fallbacks: entry.results.slice(1).filter(Boolean),
+          checkedAt: Date.now(),
+        });
+      }
     });
 
     const totalToProbe = uniqueUrls.size;
@@ -174,7 +195,7 @@
 
     // Станции без адресов завершаем сразу — их нечем проверять.
     perStation.forEach(function (entry, stationId) {
-      if (entry.remaining > 0) return;
+      if (entry.urls.length > 0) return;
       stationsDone += 1;
       store.setHealth(stationId, {
         primary: { ok: false, reason: "no-url" },

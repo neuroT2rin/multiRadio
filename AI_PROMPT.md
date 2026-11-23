@@ -480,6 +480,8 @@ document.querySelector("#stations-list").appendChild(row);
   один раз (дедупликация), станции без адресов завершаются сразу;
 - прогресс: `done/total` по источникам и `stationsDone/stationsTotal` по станциям;
 - результат станции: `{primary: Probe, fallbacks: Probe[], checkedAt}`;
+- адрес, который сейчас звучит, не проверяется повторно (`reason: "now-playing"`):
+  второй запрос к тому же потоку может оборвать вещание;
 - автораз в 90 с (только видимая вкладка), вручную — `MR.health.run({manual:true})`;
 - повторный запуск при `running` игнорируется (для manual — тост).
 
