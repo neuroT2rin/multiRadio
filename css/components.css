@@ -714,6 +714,17 @@ body.modal-open {
    Тосты
    -------------------------------------------------------------------------- */
 
+.import-warning {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--danger-soft);
+  border-left: 3px solid var(--danger);
+  border-radius: 10px;
+}
+
 .toast-region {
   position: fixed;
   right: 20px;

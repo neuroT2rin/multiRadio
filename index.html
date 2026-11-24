@@ -623,6 +623,28 @@
     </div>
   </div>
 
+  <!-- Импорт: заменить или объединить -->
+  <div class="modal" id="modal-import" role="dialog" aria-modal="true" aria-labelledby="import-title" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__panel modal__panel--sm" role="document">
+      <header class="modal__header">
+        <div>
+          <h2 class="modal__title" id="import-title">Импорт настроек</h2>
+          <p class="modal__subtitle">Выберите, как применить файл.</p>
+        </div>
+      </header>
+      <div class="modal__body">
+        <p class="import-warning" id="import-warning"></p>
+        <p class="settings-hint">«Объединить» добавит станции и группы из файла к текущим. «Заменить» удалит текущие станции и группы — это действие нельзя отменить.</p>
+      </div>
+      <footer class="modal__footer">
+        <button class="btn btn-ghost" type="button" id="import-cancel">Отмена</button>
+        <button class="btn btn-outline" type="button" id="import-merge">Объединить</button>
+        <button class="btn btn-danger" type="button" id="import-replace">Заменить</button>
+      </footer>
+    </div>
+  </div>
+
   <div class="toast-region" id="toast-region" role="status" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Ядро -->

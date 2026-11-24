@@ -996,7 +996,102 @@
     return serialize();
   }
 
-  function importData(data) {
+  /**
+   * Слияние импорта с текущим состоянием: станции добавляются без дублей
+   * по имени, группы объединяются по имени, избранное дополняется.
+   * Настройки звука/вида остаются текущими.
+   */
+  function mergeImport(data) {
+    const idMap = new Map();
+    const rawStations = Array.isArray(data.stations) ? data.stations : [];
+    let stationsAdded = 0;
+    let stationsSkipped = 0;
+
+    rawStations.forEach(function (raw) {
+      if (!raw || typeof raw !== "object") return;
+
+      const result = addStation({
+        name: raw.name,
+        emoji: raw.emoji,
+        genre: raw.genre,
+        bitrate: raw.bitrate,
+        primary: raw.primary,
+        fallbacks: Array.isArray(raw.fallbacks) ? raw.fallbacks : [],
+        groupId: "",
+      });
+
+      if (result.ok) {
+        stationsAdded += 1;
+        if (raw.id) idMap.set(raw.id, result.station.id);
+        return;
+      }
+
+      stationsSkipped += 1;
+      const existing = state.stations.find(function (station) {
+        return station.name.toLowerCase() === String(raw.name || "").trim().toLowerCase();
+      });
+      if (existing && raw.id) idMap.set(raw.id, existing.id);
+    });
+
+    const rawGroups = Array.isArray(data.groups) ? data.groups : [];
+    let groupsAdded = 0;
+    let groupsMerged = 0;
+
+    rawGroups.forEach(function (raw) {
+      if (!raw || typeof raw !== "object") return;
+      const name = String(raw.name || "").trim();
+      if (!name) return;
+
+      const mappedIds = (Array.isArray(raw.stationIds) ? raw.stationIds : [])
+        .map(function (stationId) { return idMap.get(stationId) || stationId; })
+        .filter(function (stationId) { return Boolean(findStation(stationId)); });
+
+      const existing = state.groups.find(function (group) {
+        return group.name.toLowerCase() === name.toLowerCase();
+      });
+
+      if (existing) {
+        const union = existing.stationIds.slice();
+        mappedIds.forEach(function (stationId) {
+          if (union.indexOf(stationId) === -1) union.push(stationId);
+        });
+        const updated = updateGroup(existing.id, { name: existing.name, stationIds: union });
+        if (updated.ok) groupsMerged += 1;
+        return;
+      }
+
+      const created = addGroup({ name: name, stationIds: mappedIds });
+      if (created.ok) groupsAdded += 1;
+    });
+
+    const incomingFavorites = Array.isArray(data.favorites) ? data.favorites : [];
+    let favoritesAdded = 0;
+    incomingFavorites.forEach(function (stationId) {
+      const mapped = idMap.get(stationId) || stationId;
+      if (!findStation(mapped) || state.favorites.has(mapped)) return;
+      state.favorites.add(mapped);
+      favoritesAdded += 1;
+    });
+    if (favoritesAdded) emit("favorites");
+
+    saveNow();
+    emitAll();
+
+    return {
+      ok: true,
+      mode: "merge",
+      counts: {
+        stations: stationsAdded,
+        groups: groupsAdded + groupsMerged,
+        groupsAdded: groupsAdded,
+        groupsMerged: groupsMerged,
+        favorites: favoritesAdded,
+        skipped: stationsSkipped,
+      },
+    };
+  }
+
+  function importData(data, options) {
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       return { ok: false, error: "Файл не содержит объекта настроек" };
     }
@@ -1006,11 +1101,15 @@
       return { ok: false, error: "Неподдерживаемая версия файла: " + (data.version || "—") };
     }
 
+    if (options && options.mode === "merge") {
+      return mergeImport(data);
+    }
+
     const counts = hydrate(data);
     saveNow();
     emitAll();
 
-    return { ok: true, counts: counts };
+    return { ok: true, mode: "replace", counts: counts };
   }
 
   function resetAll() {

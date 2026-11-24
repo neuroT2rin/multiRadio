@@ -154,7 +154,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой) | `init`, `render`, `openEditor(groupId)` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
-| `js/ui/settings.js` | Настройки вида, compat, export/import/reset | `init`, `open` |
+| `js/ui/settings.js` | Настройки вида, compat, export/import (замена или слияние), reset | `init`, `open` |
 | `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
 | `js/ui/sleep-timer.js` | Таймер сна в шапке: отсчёт и остановка радио | `init`, `start(minutes)`, `cancel`, `dispose`, `remainingMs` |
 | `js/ui/voice-search.js` | Голосовой подбор станции (Web Speech API + локальный матчер) | `init`, `start`, `stop`, `match(text)`, `supported`, `dispose` |
@@ -224,7 +224,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | Плеер/звук | `setPlayback(patch)`, `setVolume(0..1)`, `toggleMute()`, `setEqGain(i, дБ)`, `setEqGains(arr)`, `applyEqPreset(key)`, `resetEq()` |
 | Проверка | `setHealth(id, result)`, `setHealthBatch(map)`, `setHealthProgress(patch)` |
 | Сеть/вид | `setNetwork(patch)`, `setView(view)`, `setBgEnabled(bool)`, `toggleBg()`, `setVisualizerMode(mode)`, `setMiniMode(mode)`, `setStationView('list'\|'grid')`, `setTheme('dark'\|'light')`, `setCompatMode(bool)` |
-| Данные | `exportData() → v2-объект`, `importData(obj) → {ok, counts\|error}`, `resetAll()`, `restoreDefaultStations()` |
+| Данные | `exportData() → v2-объект`, `importData(obj, {mode:'replace'\|'merge'}) → {ok, mode, counts\|error}`, `resetAll()`, `restoreDefaultStations()` |
 
 ### 5.3 Входные данные
 
@@ -375,7 +375,8 @@ document.querySelector("#stations-list").appendChild(row);
 Настройки: modal-settings, setting-bg, setting-mode, setting-compat, import-file,
           settings-version, settings-storage
 Прочее:   modal-confirm, confirm-title, confirm-message, confirm-ok, confirm-cancel,
-          info-connection, info-connection-state, info-source, info-bitrate,
+          modal-import, import-title, import-warning, import-merge, import-replace,
+          import-cancel, info-connection, info-connection-state, info-source, info-bitrate,
           info-playback, info-health, recheck-btn, recheck-label,
           stats-total, stats-stations, stats-genres, stats-empty,
           bg-visualizer, bg-canvas, uptime, toast-region
@@ -551,7 +552,7 @@ VPN точно определить нельзя — не обещать это�
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
-| Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings` | экспорт→импорт, v1-файл |
+| Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings`/`modal-import` | экспорт→импорт, v1-файл, замена и слияние |
 | Тема, цвета, отступы | `css/base.css` + конкретный css | css | визуальный просмотр |
 | Адаптив | `css/layout.css`, `css/player.css`, `css/components.css` | css | 390/768/1440 |
 | Тесты логики | `tests/store.test.js` | тест + код | 20/20 |

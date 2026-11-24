@@ -17,6 +17,9 @@
   let fileInput = null;
   let versionLabel = null;
   let storageLabel = null;
+  let importModal = null;
+  let importWarning = null;
+  let importResolve = null;
 
   function renderStorage() {
     if (!storageLabel) return;
@@ -62,12 +65,40 @@
     MR.toast.success("Настройки экспортированы в JSON-файл.");
   }
 
+  function askImportMode(preview) {
+    return new Promise(function (resolve) {
+      importResolve = resolve;
+
+      if (importWarning) {
+        importWarning.textContent =
+          "В файле: " + preview.stations + " " +
+          utils.pluralRu(preview.stations, "station") + " и " +
+          preview.groups + " " + utils.pluralRu(preview.groups, "group") + ". " +
+          "Сейчас сохранено: " + store.state.stations.length + " " +
+          utils.pluralRu(store.state.stations.length, "station") + " и " +
+          store.state.groups.length + " " +
+          utils.pluralRu(store.state.groups.length, "group") + ". " +
+          "«Заменить» сотрёт текущие станции и группы.";
+      }
+
+      MR.modal.open(importModal);
+    });
+  }
+
+  function settleImport(mode) {
+    const resolve = importResolve;
+    importResolve = null;
+
+    if (importModal) MR.modal.close(importModal);
+    if (resolve) resolve(mode);
+  }
+
   function handleFile(file) {
     if (!file) return;
 
     const reader = new FileReader();
 
-    reader.onload = function (event) {
+    reader.onload = async function (event) {
       let data = null;
       try {
         data = JSON.parse(String(event.target.result));
@@ -76,18 +107,41 @@
         return;
       }
 
-      const result = store.importData(data);
+      const version = Number(data && data.version);
+      if (version !== 1 && version !== 2) {
+        MR.toast.error("Неподдерживаемая версия файла: " + ((data && data.version) || "—"));
+        return;
+      }
+
+      const preview = {
+        stations: Array.isArray(data.stations) ? data.stations.length : 0,
+        groups: Array.isArray(data.groups) ? data.groups.length : 0,
+      };
+
+      const mode = await askImportMode(preview);
+      if (!mode) return;
+
+      const result = store.importData(data, { mode });
       if (!result.ok) {
         MR.toast.error("Импорт не выполнен: " + result.error);
         return;
       }
 
       renderStorage();
-      MR.toast.success(
-        "Импортировано: " + result.counts.stations + " " +
-        utils.pluralRu(result.counts.stations, "station") + ", " +
-        result.counts.groups + " " + utils.pluralRu(result.counts.groups, "group") + "."
-      );
+
+      if (mode === "merge") {
+        MR.toast.success(
+          "Объединено: +" + result.counts.stations + " " +
+          utils.pluralRu(result.counts.stations, "station") + ", групп: " +
+          result.counts.groups + "."
+        );
+      } else {
+        MR.toast.success(
+          "Заменено: " + result.counts.stations + " " +
+          utils.pluralRu(result.counts.stations, "station") + ", " +
+          result.counts.groups + " " + utils.pluralRu(result.counts.groups, "group") + "."
+        );
+      }
     };
 
     reader.onerror = function () {
@@ -139,7 +193,24 @@
     fileInput = dom.$("#import-file");
     versionLabel = dom.$("#settings-version");
     storageLabel = dom.$("#settings-storage");
+    importModal = dom.$("#modal-import");
+    importWarning = dom.$("#import-warning");
     if (!modal) return;
+
+    if (importModal) {
+      const cancel = dom.$("#import-cancel");
+      const merge = dom.$("#import-merge");
+      const replace = dom.$("#import-replace");
+      const backdrop = importModal.querySelector(".modal__backdrop");
+
+      if (cancel) cancel.addEventListener("click", function () { settleImport(null); });
+      if (merge) merge.addEventListener("click", function () { settleImport("merge"); });
+      if (replace) replace.addEventListener("click", function () { settleImport("replace"); });
+      if (backdrop) backdrop.addEventListener("click", function () { settleImport(null); });
+      importModal.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") settleImport(null);
+      });
+    }
 
     MR.commands.registerMany({
       "settings:open": open,

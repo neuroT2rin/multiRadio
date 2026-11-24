@@ -74,6 +74,9 @@
     const label = dom.$("#health-progress-label");
     if (!container || !fill || !label) return;
 
+    // emitAll() приходит без payload — берём текущий прогресс из стора.
+    progress = progress || store.state.healthProgress;
+
     const total = progress.total || 0;
     const done = utils.clamp(progress.done || 0, 0, total || 0);
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;

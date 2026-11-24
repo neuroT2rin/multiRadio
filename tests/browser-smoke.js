@@ -368,6 +368,27 @@ async function main() {
   await screenshot("settings.png");
   await evaluate(`document.querySelector('#modal-settings [data-close-modal]').click()`);
 
+  // Импорт: слияние не стирает текущие станции и группы
+  results.importMerge = await evaluate(`(() => {
+    const before = MR.store.state.stations.length;
+    const result = MR.store.importData({
+      version: 2,
+      stations: [
+        { id: "import-test", name: "Импорт-тест", genre: "Jazz", bitrate: "128 kbps", emoji: "🎷", primary: "https://example.com/import.mp3", fallbacks: [] },
+      ],
+      groups: [{ id: "import-group", name: "Импорт-группа", stationIds: ["import-test"] }],
+      favorites: ["import-test"],
+    }, { mode: "merge" });
+    return {
+      ok: result.ok,
+      mode: result.mode,
+      added: result.counts.stations,
+      total: MR.store.state.stations.length,
+      grew: MR.store.state.stations.length === before + 1,
+      modal: Boolean(document.querySelector("#modal-import")),
+    };
+  })()`);
+
   // Светлая тема: переключение и возврат
   await evaluate(`document.querySelector('#theme-toggle').click()`);
   await sleep(350);
