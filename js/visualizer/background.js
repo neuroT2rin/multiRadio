@@ -27,12 +27,23 @@
     [150, 164, 178, 194, 208],
     [36, 46, 26, 318, 288],
   ];
-  const TUNNEL_RINGS = 24;
-  const TUNNEL_SEGMENTS = 44;
+  const TUNNEL_RINGS = 28;
+  const TUNNEL_SEGMENTS = 48;
   const TUNNEL_RIBS = 16;
-  const TUNNEL_SPACING = 170;
-  const TUNNEL_NEAR = 120;
+  const TUNNEL_SPACING = 100;
+  const TUNNEL_NEAR = 90;
   const TUNNEL_FOCAL = 780;
+  const TUNNEL_RADIUS = 132;
+  /** Шаг точек кольца на одно продольное ребро (48 / 16 = 3). */
+  const TUNNEL_RIB_STRIDE = TUNNEL_SEGMENTS / TUNNEL_RIBS;
+  /** Диагональ холста 1440×900 — эталон, от которого труба масштабируется под экран. */
+  const TUNNEL_REF_DIAGONAL = 1700;
+  /** Запас bbox: толщина линии и свечение вокруг уже посчитанных точек. */
+  const TUNNEL_CULL_MARGIN = 72;
+  /** Скорость камеры на единицу сглаженного множителя, px/с. */
+  const TUNNEL_BASE_SPEED = 160;
+  const TUNNEL_SPEED_MIN = 0.2;
+  const TUNNEL_SPEED_MAX = 2.4;
 
   /** «Голос»: число точек осциллограммы и оттенки трёх формантных полос. */
   const VOICE_POINTS = 128;
@@ -41,6 +52,54 @@
   let tunnelProgress = 0;
   let tunnelLastAt = 0;
   let tunnelCamera = 0;
+  let tunnelSpeed = 0.55;
+  let tunnelBpm = 0;
+  let tunnelLastBeatAt = 0;
+  let tunnelTime = 0;
+  let tunnelViewScale = 1;
+
+  /**
+   * Точки колец и рёбер создаются один раз: в кадре только перезаписываются
+   * координаты, без аллокаций массивов и объектов.
+   */
+  const tunnelRings = [];
+  const tunnelRibs = [];
+
+  (function buildTunnelBuffers() {
+    for (let order = 0; order < TUNNEL_RINGS; order += 1) {
+      const points = new Array(TUNNEL_SEGMENTS);
+      for (let i = 0; i < TUNNEL_SEGMENTS; i += 1) {
+        points[i] = { x: 0, y: 0 };
+      }
+      tunnelRings.push({ index: order, depth: 0, visible: true, points: points });
+    }
+
+    for (let rib = 0; rib < TUNNEL_RIBS; rib += 1) {
+      const points = new Array(TUNNEL_RINGS);
+      for (let order = 0; order < TUNNEL_RINGS; order += 1) {
+        points[order] = tunnelRings[order].points[rib * TUNNEL_RIB_STRIDE];
+      }
+      tunnelRibs.push(points);
+    }
+  })();
+
+  /** Осевая линия туннеля: плавные изгибы, которые меняются во времени. */
+  function tunnelPathX(z) {
+    return 62 * Math.sin(z * 0.0011 + tunnelTime * 0.07) +
+      26 * Math.sin(z * 0.0029 + 1.7 + tunnelTime * 0.05);
+  }
+
+  function tunnelPathY(z) {
+    return 34 * Math.cos(z * 0.0014 + 0.6 + tunnelTime * 0.03) +
+      18 * Math.sin(z * 0.0031 + tunnelTime * 0.04);
+  }
+
+  /** Радиус туннеля «дышит» по глубине и масштабируется под размер холста. */
+  function tunnelPathRadius(z) {
+    return TUNNEL_RADIUS * tunnelViewScale * (1 +
+      0.16 * Math.sin(z * 0.0032 + tunnelTime * 0.22) +
+      0.08 * Math.sin(z * 0.0061 - tunnelTime * 0.13));
+  }
 
   let voiceWave = null;
   let voiceLevel = 0;
@@ -526,94 +585,161 @@
   /**
    * «Туннель» — полёт сквозь органический туннель.
    *
-   * Камера непрерывно едет вперёд, а стены — замкнутые кривые Безье с
-   * неоднородным радиусом, закрученные по глубине. Музыка, как и раньше,
-   * управляет только цветом и скоростью смены палитры; форма и движение
-   * камеры живут по собственному времени.
+   * Стены — замкнутые кривые Безье с неоднородным радиусом, закрученные по
+   * глубине. Кольца и продольные рёбра рисуются, пока их bbox (с запасом на
+   * толщину линии и свечение) пересекается с холстом: раннего гашения по
+   * глубине больше нет, поэтому кривые доходят до краёв экрана и не обрываются
+   * в центре. Скорость камеры плавно следует за темпом трека (BPM по
+   * интервалам ударов) и его энергией; в паузе — медленный дрейф.
    */
   function drawTunnel(analysis, now, hue, energy, idle) {
     const level = idle ? 0 : utils.clamp(analysis.level, 0, 1);
+    const mid = idle ? 0 : utils.clamp(analysis.mid, 0, 1);
     const treble = idle ? 0 : utils.clamp(analysis.treble, 0, 1);
 
-    const dt = tunnelLastAt ? Math.min(80, now - tunnelLastAt) / 1000 : 0.016;
+    // dt не бывает отрицательным: время кадра может прийти из другого источника
+    // (resize/видимость вкладки), и тогда камера не должна ехать назад.
+    const dt = tunnelLastAt
+      ? utils.clamp(now - tunnelLastAt, 0, 80) / 1000
+      : 0.016;
     tunnelLastAt = now;
+    tunnelTime = now * 0.001;
+    tunnelViewScale = utils.clamp(
+      Math.hypot(width, height) / TUNNEL_REF_DIAGONAL,
+      0.5,
+      1.5
+    );
 
-    tunnelCamera += dt * 210;
+    // Темп: интервалы между ударами → BPM (сглаженный).
+    // Удар приходит не чаще, чем раз в 170 мс (см. analyser.detectBeat).
+    const beat = Boolean(!idle && analysis && analysis.beat);
+    if (beat) {
+      if (tunnelLastBeatAt) {
+        const gap = now - tunnelLastBeatAt;
+        if (gap >= 170 && gap <= 1600) {
+          const instantBpm = 60000 / gap;
+          tunnelBpm = tunnelBpm
+            ? tunnelBpm + (instantBpm - tunnelBpm) * 0.2
+            : instantBpm;
+        }
+      }
+      tunnelLastBeatAt = now;
+    } else if (tunnelBpm && now - tunnelLastBeatAt > 2200) {
+      // Музыка стихла — плавно возвращаемся к спокойному дрейфу.
+      tunnelBpm *= Math.exp(-dt * 1.1);
+      if (tunnelBpm < 1) tunnelBpm = 0;
+    }
+
+    // Множитель скорости: 60 BPM → 0, 170 BPM и выше → 1.
+    const tempo = tunnelBpm ? utils.clamp((tunnelBpm - 60) / 110, 0, 1) : 0;
+    const loudness = idle
+      ? 0
+      : utils.clamp(level * 0.62 + mid * 0.28 + treble * 0.1, 0, 1);
+    const targetSpeed = idle
+      ? TUNNEL_SPEED_MIN
+      : utils.clamp(
+        0.3 + tempo * 1.05 + loudness * 0.8 + beatFlash * 0.18,
+        TUNNEL_SPEED_MIN,
+        TUNNEL_SPEED_MAX
+      );
+
+    // Экспоненциальное сглаживание — камера разгоняется и тормозит без рывков.
+    tunnelSpeed += (targetSpeed - tunnelSpeed) * (1 - Math.exp(-dt * 3.4));
+    tunnelCamera += dt * TUNNEL_BASE_SPEED * tunnelSpeed;
 
     // Цвет: та же палитра, что и раньше; музыка меняет скорость перехода.
     const paletteSpeed = 0.08 + level * 0.55 + treble * 0.3 + beatFlash * 0.9;
     tunnelProgress += dt * paletteSpeed;
 
     const count = TUNNEL_PALETTES.length;
-    const current = Math.floor(tunnelProgress) % count;
+    // Остаток берём с положительным знаком: прогресс только растёт, но защита
+    // от выбросов времени не должна давать undefined-палитру.
+    const current = ((Math.floor(tunnelProgress) % count) + count) % count;
     const next = (current + 1) % count;
     const mix = smoothStep(tunnelProgress - Math.floor(tunnelProgress));
     const paletteA = TUNNEL_PALETTES[current];
     const paletteB = TUNNEL_PALETTES[next];
 
-    const time = now * 0.001;
-
-    // Осевая линия туннеля: плавные изгибы, которые меняются во времени.
-    const pathX = function (z) {
-      return 62 * Math.sin(z * 0.0011 + time * 0.07) +
-        26 * Math.sin(z * 0.0029 + 1.7 + time * 0.05);
-    };
-    const pathY = function (z) {
-      return 34 * Math.cos(z * 0.0014 + 0.6 + time * 0.03) +
-        18 * Math.sin(z * 0.0031 + time * 0.04);
-    };
-    // Радиус туннеля «дышит» и меняется по глубине.
-    const pathRadius = function (z) {
-      return 126 * (1 +
-        0.16 * Math.sin(z * 0.0032 + time * 0.22) +
-        0.08 * Math.sin(z * 0.0061 - time * 0.13));
-    };
-
     const totalDepth = TUNNEL_RINGS * TUNNEL_SPACING;
     const offset = tunnelCamera % TUNNEL_SPACING;
-    const camX = pathX(tunnelCamera);
-    const camY = pathY(tunnelCamera);
+    const camX = tunnelPathX(tunnelCamera);
+    const camY = tunnelPathY(tunnelCamera);
     const cx = width / 2;
     const cy = height * 0.5;
 
-    // Кольца на разных глубинах; дальние рисуем первыми.
-    const rings = [];
-    for (let index = 0; index < TUNNEL_RINGS; index += 1) {
-      rings.push({
-        index: index,
-        depth: TUNNEL_NEAR +
-          ((index * TUNNEL_SPACING - offset + totalDepth) % totalDepth),
-      });
+    // Ближайшее кольцо — с минимальным (index * SPACING - offset) mod totalDepth;
+    // при offset > 0 это index 1, иначе 0. Дальше глубина только растёт.
+    const firstIndex = offset > 0 ? 1 : 0;
+
+    // 1) Точки всех колец (в порядке «ближнее → дальнее») и их bbox.
+    for (let order = 0; order < TUNNEL_RINGS; order += 1) {
+      const index = (firstIndex + order) % TUNNEL_RINGS;
+      const ring = tunnelRings[order];
+      const depth = TUNNEL_NEAR +
+        ((index * TUNNEL_SPACING - offset + totalDepth) % totalDepth);
+      const scale = TUNNEL_FOCAL / depth;
+      const z = tunnelCamera + depth;
+      const ringX = cx + (tunnelPathX(z) - camX) * scale;
+      const ringY = cy + (tunnelPathY(z) - camY) * scale;
+      const radius = tunnelPathRadius(z) * scale;
+
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+
+      for (let i = 0; i < TUNNEL_SEGMENTS; i += 1) {
+        const theta = (i / TUNNEL_SEGMENTS) * Math.PI * 2;
+        const wobble = tunnelWobble(theta, z, depth, totalDepth, tunnelTime);
+        const rr = radius * wobble;
+        const x = ringX + Math.cos(theta) * rr;
+        const y = ringY + Math.sin(theta) * rr;
+        const point = ring.points[i];
+
+        point.x = x;
+        point.y = y;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+
+      ring.index = index;
+      ring.depth = depth;
+      ring.visible = maxX > -TUNNEL_CULL_MARGIN &&
+        minX < width + TUNNEL_CULL_MARGIN &&
+        maxY > -TUNNEL_CULL_MARGIN &&
+        minY < height + TUNNEL_CULL_MARGIN;
     }
-    rings.sort(function (a, b) { return b.depth - a.depth; });
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.lineCap = "round";
 
-    // Продольные рёбра стен: замкнутые кольца соединены плавными кривыми.
+    // 2) Продольные рёбра стен — плавные кривые по уже посчитанным точкам.
     for (let rib = 0; rib < TUNNEL_RIBS; rib += 1) {
-      const theta = (rib / TUNNEL_RIBS) * Math.PI * 2;
-      const points = [];
-      let ribHue = 0;
+      const points = tunnelRibs[rib];
 
-      for (let r = 0; r < rings.length; r += 1) {
-        const depth = rings[r].depth;
-        const scale = TUNNEL_FOCAL / depth;
-        const z = tunnelCamera + depth;
-        const wobble = tunnelWobble(theta, z, depth, totalDepth, time);
-        const radius = pathRadius(z) * scale * wobble;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
 
-        points.push({
-          x: cx + (pathX(z) - camX) * scale + Math.cos(theta) * radius,
-          y: cy + (pathY(z) - camY) * scale + Math.sin(theta) * radius,
-        });
-
-        if (r === 0) {
-          const paletteIndex = rib % paletteA.length;
-          ribHue = lerpHue(paletteA[paletteIndex], paletteB[paletteIndex], mix);
-        }
+      for (let order = 0; order < TUNNEL_RINGS; order += 1) {
+        const point = points[order];
+        if (point.x < minX) minX = point.x;
+        if (point.x > maxX) maxX = point.x;
+        if (point.y < minY) minY = point.y;
+        if (point.y > maxY) maxY = point.y;
       }
+
+      if (maxX < -TUNNEL_CULL_MARGIN || minX > width + TUNNEL_CULL_MARGIN ||
+        maxY < -TUNNEL_CULL_MARGIN || minY > height + TUNNEL_CULL_MARGIN) {
+        continue;
+      }
+
+      const paletteIndex = rib % paletteA.length;
+      const ribHue = lerpHue(paletteA[paletteIndex], paletteB[paletteIndex], mix);
 
       ctx.beginPath();
       traceSmooth(points);
@@ -622,47 +748,27 @@
       ctx.stroke();
     }
 
-    // Замкнутые органические стены туннеля.
-    for (let r = 0; r < rings.length; r += 1) {
-      const ring = rings[r];
+    // 3) Замкнутые органические стены туннеля.
+    for (let order = 0; order < TUNNEL_RINGS; order += 1) {
+      const ring = tunnelRings[order];
+      if (!ring.visible) continue;
+
       const depth = ring.depth;
-      const scale = TUNNEL_FOCAL / depth;
-      const z = tunnelCamera + depth;
-      const ringX = cx + (pathX(z) - camX) * scale;
-      const ringY = cy + (pathY(z) - camY) * scale;
-      const radius = pathRadius(z) * scale;
-      const points = new Array(TUNNEL_SEGMENTS);
-
-      for (let i = 0; i < TUNNEL_SEGMENTS; i += 1) {
-        const theta = (i / TUNNEL_SEGMENTS) * Math.PI * 2;
-        const wobble = tunnelWobble(theta, z, depth, totalDepth, time);
-        const rr = radius * wobble;
-
-        points[i] = {
-          x: ringX + Math.cos(theta) * rr,
-          y: ringY + Math.sin(theta) * rr,
-        };
-      }
-
-      const nearFade = utils.clamp((depth - TUNNEL_NEAR) / 200, 0, 1);
-      const farFade = utils.clamp((totalDepth - (depth - TUNNEL_NEAR)) / 1400, 0, 1);
-      const alpha = (0.12 + energy * 0.28) * nearFade * (0.2 + 0.8 * farFade);
-      if (alpha <= 0.005) continue;
-
       const paletteIndex = ring.index % paletteA.length;
       const ringHue = lerpHue(paletteA[paletteIndex], paletteB[paletteIndex], mix) +
         (depth / totalDepth) * 34;
       const sizeFade = 1 - depth / (totalDepth + TUNNEL_NEAR);
+      // Мягкая глубина: дальние кольца чуть прозрачнее, но никогда не гаснут.
+      const depthShade = 0.55 + 0.45 * (1 - depth / totalDepth);
+      const alpha = Math.min(1, (0.12 + energy * 0.28) * depthShade);
 
       ctx.beginPath();
-      traceClosedSmooth(points);
-      ctx.strokeStyle = hsla(ringHue, 90, 64, Math.min(1, alpha * 0.5));
+      traceClosedSmooth(ring.points);
+      ctx.strokeStyle = hsla(ringHue, 90, 64, alpha * 0.5);
       ctx.lineWidth = Math.max(0.6, 4.2 * sizeFade);
       ctx.stroke();
 
-      ctx.beginPath();
-      traceClosedSmooth(points);
-      ctx.strokeStyle = hsla(ringHue, 96, 76, Math.min(1, alpha));
+      ctx.strokeStyle = hsla(ringHue, 96, 76, alpha);
       ctx.lineWidth = Math.max(0.5, 1.1 * sizeFade + 0.35);
       ctx.stroke();
     }
