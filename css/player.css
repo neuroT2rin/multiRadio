@@ -310,6 +310,41 @@ input[type="range"].range:focus-visible {
   filter: brightness(1.08);
 }
 
+/* LIVE и отставание от эфира — одна группа поверх визуализатора */
+.timemachine-live-wrap {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timemachine-live-wrap .timemachine-live {
+  position: static;
+}
+
+/* Бейдж «−5 с»: показывает, насколько буфер отстаёт от живого эфира.
+   Кликов не перехватывает — кнопка LIVE остаётся доступной. */
+.timemachine-lag {
+  padding: 2px 7px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.timemachine-lag[hidden] {
+  display: none;
+}
+
 /* --------------------------------------------------------------------------
    Вкладки
    -------------------------------------------------------------------------- */
@@ -1098,6 +1133,10 @@ html[data-theme="light"] .mini-visualizer {
 
 html[data-theme="light"] .mini-visualizer canvas {
   filter: brightness(0.72) saturate(1.15);
+}
+
+html[data-theme="light"] .timemachine-lag {
+  border-color: rgba(11, 120, 168, 0.32);
 }
 
 html[data-theme="light"] .view-tabs,

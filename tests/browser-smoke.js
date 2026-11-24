@@ -708,6 +708,7 @@ async function main() {
     available: Math.round(MR.timemachine.availableSeconds()),
     capturing: MR.timemachine.isCapturing(),
     slider: Boolean(document.querySelector('#timemachine')),
+    lagHidden: document.querySelector('#timemachine-lag').hidden,
   }))()`);
 
   results.timemachineRewind = await evaluate(`(async () => {
@@ -750,6 +751,7 @@ async function main() {
     const available = MR.timemachine.availableSeconds();
     const ok = available >= 2 ? MR.timemachine.seek(2) : false;
     const slider = document.querySelector('#timemachine');
+    const lag = document.querySelector('#timemachine-lag');
     return {
       ok: ok,
       available: Math.round(available * 10) / 10,
@@ -761,6 +763,10 @@ async function main() {
       sliderDisabled: slider.disabled,
       sliderHidden: slider.hidden,
       title: slider.title,
+      lagVisible: !lag.hidden && lag.getBoundingClientRect().width > 0,
+      lagText: lag.textContent,
+      lagTitle: lag.getAttribute('title'),
+      lagAria: lag.getAttribute('aria-label'),
     };
   })()`);
 
@@ -778,10 +784,12 @@ async function main() {
     MR.timemachine.returnLive();
     const bufferedAfterReturn = MR.timemachine.isBuffered();
     const availableAfterReturn = Math.round(MR.timemachine.availableSeconds() * 10) / 10;
+    const lagHiddenAfterReturn = document.querySelector('#timemachine-lag').hidden;
     MR.audio.stop();
     return {
       bufferedAfterReturn: bufferedAfterReturn,
       availableAfterReturn: availableAfterReturn,
+      lagHiddenAfterReturn: lagHiddenAfterReturn,
       statusAfterStop: MR.store.state.playback.status,
       availableAfterStop: MR.timemachine.availableSeconds(),
       sliderHidden: document.querySelector('#timemachine').hidden,
@@ -828,6 +836,7 @@ async function main() {
   results.timemachineContinuousStart = await evaluate(`(() => {
     const ok = MR.timemachine.playFrom(2);
     const slider = document.querySelector('#timemachine');
+    const lag = document.querySelector('#timemachine-lag');
     return {
       ok: ok,
       available: Math.round(MR.timemachine.availableSeconds() * 10) / 10,
@@ -837,8 +846,79 @@ async function main() {
       status: MR.store.state.playback.status,
       liveVisible: !document.querySelector('#timemachine-live').hidden,
       sliderMax: Number(slider.max),
+      lagVisible: !lag.hidden,
+      lagText: lag.textContent,
+      lagTitle: lag.getAttribute('title'),
+      lagAria: lag.getAttribute('aria-label'),
     };
   })()`);
+
+  // Бейдж отставания: виден при активном буфере, не перекрывает ползунок и
+  // кнопку LIVE, скрыт после возврата в эфир.
+  await screenshot("timemachine-lag.png");
+  results.timemachineLagLayout = await evaluate(`(() => {
+    const lag = document.querySelector('#timemachine-lag');
+    const live = document.querySelector('#timemachine-live');
+    const slider = document.querySelector('#timemachine');
+    const lagRect = lag.getBoundingClientRect();
+    const liveRect = live.getBoundingClientRect();
+    const sliderRect = slider.getBoundingClientRect();
+    const visualizerRect = document.querySelector('.mini-visualizer').getBoundingClientRect();
+    return {
+      visible: !lag.hidden && lagRect.width > 0 && lagRect.height > 0,
+      afterLive: lagRect.left >= liveRect.right - 1,
+      aboveSlider: lagRect.bottom <= sliderRect.top,
+      insideVisualizer: lagRect.left >= visualizerRect.left && lagRect.right <= visualizerRect.right,
+      pointerEvents: getComputedStyle(lag).pointerEvents,
+      noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+    };
+  })()`);
+
+  // Узкий экран: бейдж остаётся в углу визуализатора и не создаёт скролл.
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
+  });
+  await sleep(300);
+  results.timemachineLagMobile = await evaluate(`(() => {
+    const lag = document.querySelector('#timemachine-lag');
+    const live = document.querySelector('#timemachine-live');
+    const slider = document.querySelector('#timemachine');
+    const lagRect = lag.getBoundingClientRect();
+    const liveRect = live.getBoundingClientRect();
+    const sliderRect = slider.getBoundingClientRect();
+    return {
+      visible: !lag.hidden && lagRect.width > 0,
+      text: lag.textContent,
+      afterLive: lagRect.left >= liveRect.right - 1,
+      aboveSlider: lagRect.bottom <= sliderRect.top,
+      insideViewport: lagRect.right <= window.innerWidth,
+      noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+    };
+  })()`);
+  await screenshot("timemachine-lag-mobile.png");
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false,
+  });
+  await sleep(300);
+
+  // Светлая тема: чип читаем и остаётся статичным (без анимаций).
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  await sleep(250);
+  results.timemachineLagLight = await evaluate(`(() => {
+    const lag = document.querySelector('#timemachine-lag');
+    const style = getComputedStyle(lag);
+    return {
+      theme: document.documentElement.dataset.theme,
+      visible: !lag.hidden && lag.getBoundingClientRect().width > 0,
+      color: style.color,
+      background: style.backgroundColor,
+      animation: style.animationName,
+      transition: style.transitionDuration,
+    };
+  })()`);
+  await screenshot("timemachine-lag-light.png");
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  await sleep(200);
 
   // Первый сегмент был ≈2 с: через 3 с старая реализация уже ушла бы в live.  await sleep(3000);
   results.timemachineContinuousMid = await evaluate(`(() => ({
@@ -899,6 +979,7 @@ async function main() {
       bufferedAfter: bufferedAfter,
       playingAfter: playingAfter,
       status: MR.store.state.playback.status,
+      lagHiddenAfter: document.querySelector('#timemachine-lag').hidden,
     };
   })()`);
 
@@ -941,6 +1022,7 @@ async function main() {
       enabled: MR.store.state.ui.bufferEnabled,
       available: MR.timemachine.availableSeconds(),
       sliderHidden: document.querySelector('#timemachine').hidden,
+      lagHidden: document.querySelector('#timemachine-lag').hidden,
       selectDisabled: select.disabled,
     };
 

@@ -15,7 +15,39 @@
 
   let slider = null;
   let liveButton = null;
+  let lagBadge = null;
   let dragging = false;
+
+  /** Целые секунды отставания: «−5 с», начиная с минуты — «−1:05». */
+  function formatLag(seconds) {
+    const total = Math.max(1, Math.round(seconds));
+    if (total >= 60) {
+      const minutes = Math.floor(total / 60);
+      return "−" + minutes + ":" + String(total % 60).padStart(2, "0");
+    }
+    return "−" + total + " с";
+  }
+
+  /** Бейдж отставания виден только пока слушается буфер. */
+  function renderLag(buffered) {
+    if (!lagBadge) return;
+
+    const rewind = buffered ? MR.timemachine.getRewind() : 0;
+    if (!buffered || !(rewind > 0)) {
+      lagBadge.hidden = true;
+      lagBadge.textContent = "";
+      lagBadge.removeAttribute("title");
+      lagBadge.removeAttribute("aria-label");
+      return;
+    }
+
+    const total = Math.max(1, Math.round(rewind));
+    lagBadge.textContent = formatLag(rewind);
+    lagBadge.title = "Вы отстаёте от эфира на " + total + " " +
+      utils.pluralRu(total, "second");
+    lagBadge.setAttribute("aria-label", lagBadge.title);
+    lagBadge.hidden = false;
+  }
 
   function render() {
     if (!slider) return;
@@ -26,6 +58,7 @@
       slider.hidden = true;
       slider.disabled = true;
       if (liveButton) liveButton.hidden = true;
+      if (lagBadge) lagBadge.hidden = true;
       return;
     }
 
@@ -63,6 +96,8 @@
         : "Буфер эфира наполняется…";
       if (liveButton) liveButton.hidden = true;
     }
+
+    renderLag(buffered);
   }
 
   function applyPosition() {
@@ -83,6 +118,7 @@
   function init() {
     slider = dom.$("#timemachine");
     liveButton = dom.$("#timemachine-live");
+    lagBadge = dom.$("#timemachine-lag");
     if (!slider) return;
 
     // input нужен только чтобы не перебивать позицию во время перетаскивания.
