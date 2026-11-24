@@ -504,7 +504,7 @@ async function main() {
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
   });
-  await sleep(400);
+  await sleep(800);
   await screenshot("mobile.png");
   await evaluate(`document.querySelector('#nav-toggle').click()`);
   await sleep(300);

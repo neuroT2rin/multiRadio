@@ -633,6 +633,16 @@ body.is-viz-mode .viz-btn {
     display: none;
   }
 
+  /* На узких экранах статусы уступают место кнопкам шапки. */
+  .status-bar {
+    display: none;
+  }
+
+  .header-inner {
+    gap: 6px;
+    padding: 0 12px;
+  }
+
   .health-progress__label {
     font-size: 0.66rem;
   }
