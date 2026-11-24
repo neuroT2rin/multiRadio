@@ -1457,6 +1457,241 @@ async function main() {
       .every((dot) => ['checking', 'online', 'fallback', 'offline', 'unknown'].indexOf(dot.dataset.health) !== -1),
   }))()`);
 
+  // Разделённая кнопка «Добавить»: шеврон и меню групп.
+  results.searchGroupMenu = await evaluate(`(async () => {
+    const cards = Array.from(document.querySelectorAll('#search-results .search-card'))
+      .filter((node) => !node.classList.contains('search-card--skeleton'));
+    const storeNames = new Set(MR.store.state.stations
+      .map((station) => String(station.name).trim().toLowerCase()));
+    const cardName = (node) =>
+      node.querySelector('.search-card__name').textContent.trim().toLowerCase();
+    const pick = (requireNewName) => cards.find((node) => {
+      const button = node.querySelector('[data-search-add]');
+      if (!button || button.disabled || !node.querySelector('[data-search-add-toggle]')) return false;
+      return !requireNewName || !storeNames.has(cardName(node));
+    });
+    const card = pick(true) || pick(false);
+    if (!card) return { found: false };
+
+    const toggle = card.querySelector('[data-search-add-toggle]');
+    const expandedBefore = toggle.getAttribute('aria-expanded');
+    const hasPopup = toggle.getAttribute('aria-haspopup');
+    const label = toggle.getAttribute('aria-label');
+    toggle.click();
+    await new Promise((resolve) => setTimeout(resolve, 160));
+
+    const menu = document.querySelector('.search-add-menu');
+    const items = menu ? Array.from(menu.querySelectorAll('[data-group-option]')) : [];
+    const groupItems = items.filter((node) => node.getAttribute('data-group-option'));
+    const panel = document.querySelector('#modal-search .modal__panel').getBoundingClientRect();
+    const rect = menu ? menu.getBoundingClientRect() : null;
+
+    return {
+      found: true,
+      newName: !storeNames.has(cardName(card)),
+      hasPopup: hasPopup,
+      label: label,
+      expandedBefore: expandedBefore,
+      expanded: toggle.getAttribute('aria-expanded'),
+      menuVisible: Boolean(menu) && !menu.hidden,
+      menuRole: menu ? menu.getAttribute('role') : '',
+      itemRoles: items.length > 0 && items.every((node) => node.getAttribute('role') === 'menuitem'),
+      noGroupLabel: items.length ? items[0].querySelector('.search-add-menu__label').textContent.trim() : '',
+      groups: groupItems.length,
+      storeGroups: MR.store.state.groups.length,
+      groupNamesMatch: MR.store.state.groups.every((group) =>
+        groupItems.some((node) => node.textContent.indexOf(group.name) !== -1)),
+      hasCreate: Boolean(menu && menu.querySelector('[data-group-create]')),
+      separator: Boolean(menu && menu.querySelector('[role="separator"]')),
+      currentMarked: Boolean(menu && menu.querySelector('.search-add-menu__item.is-current')),
+      currentLabel: menu && menu.querySelector('.search-add-menu__item.is-current')
+        ? menu.querySelector('.search-add-menu__item.is-current .search-add-menu__label').textContent.trim()
+        : '',
+      focusedRole: document.activeElement ? document.activeElement.getAttribute('role') : '',
+      insidePanel: rect ? (rect.left >= panel.left - 1 && rect.right <= panel.right + 1) : false,
+      insideViewport: rect ? (rect.top >= 0 && rect.bottom <= window.innerHeight + 1) : false,
+      menuSize: rect ? [Math.round(rect.width), Math.round(rect.height)] : null,
+    };
+  })()`);
+  await screenshot("search-group-menu.png");
+
+  // Выбор группы для ещё не добавленной станции: добавление сразу в группу.
+  results.searchGroupAssign = await evaluate(`(async () => {
+    const toggle = document.querySelector('#search-results [data-search-add-toggle][aria-expanded="true"]');
+    const card = toggle.closest('.search-card');
+    const stationName = card.querySelector('.search-card__name').textContent;
+    const menu = document.querySelector('.search-add-menu');
+    const targetGroup = MR.store.state.groups.find((group) => group.name === 'Вечерний чилл') ||
+      MR.store.state.groups[0];
+    if (!targetGroup) return { found: false };
+    const item = Array.from(menu.querySelectorAll('[data-group-option]'))
+      .find((node) => node.getAttribute('data-group-option') === targetGroup.id);
+    if (!item) return { found: false, targetGroup: targetGroup.name };
+
+    const toastsBefore = new Set(Array.from(document.querySelectorAll('.toast')));
+    const before = MR.store.state.stations.length;
+    item.click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const station = MR.store.state.stations.find((entry) => entry.name === stationName);
+    const groupOf = station ? MR.store.getGroupOfStation(station.id) : null;
+    const mainButton = card.querySelector('[data-search-add]');
+    const newToast = Array.from(document.querySelectorAll('.toast'))
+      .find((node) => !toastsBefore.has(node));
+    const toastText = newToast ? newToast.querySelector('.toast__text').textContent : '';
+
+    return {
+      stationName: stationName,
+      targetGroup: targetGroup.name,
+      addedCount: MR.store.state.stations.length - before,
+      stored: Boolean(station),
+      groupName: groupOf ? groupOf.name : '',
+      inGroupIds: Boolean(groupOf && groupOf.stationIds.indexOf(station.id) !== -1),
+      duplicates: MR.store.state.stations.filter((entry) => entry.name === stationName).length,
+      menuClosed: document.querySelector('.search-add-menu').hidden,
+      expandedAfter: toggle.getAttribute('aria-expanded'),
+      mainDisabled: mainButton.disabled,
+      mainLabel: mainButton.querySelector('.search-card__add-label').textContent,
+      focusBack: document.activeElement === toggle,
+      toastText: toastText,
+      toastInGroup: toastText.indexOf(targetGroup.name) !== -1,
+    };
+  })()`);
+
+  const assignedGroupName = JSON.stringify(results.searchGroupAssign.stationName || "");
+
+  // Повторный выбор другой группы: станция переносится, дубликата нет.
+  results.searchGroupMove = await evaluate(`(async () => {
+    const stationName = ${assignedGroupName};
+    const card = Array.from(document.querySelectorAll('#search-results .search-card'))
+      .find((node) => {
+        const label = node.querySelector('.search-card__name');
+        return label && label.textContent === stationName;
+      });
+    if (!card) return { found: false };
+
+    const toggle = card.querySelector('[data-search-add-toggle]');
+    const stationBefore = MR.store.state.stations.find((entry) => entry.name === stationName);
+    const previous = stationBefore ? MR.store.getGroupOfStation(stationBefore.id) : null;
+    const before = MR.store.state.stations.length;
+
+    toggle.click();
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    const menu = document.querySelector('.search-add-menu');
+    const currentMarked = menu.querySelector('.search-add-menu__item.is-current');
+    const other = MR.store.state.groups.find((group) => group.name === 'Тест-группа 3') ||
+      MR.store.state.groups.find((group) => !previous || group.id !== previous.id);
+    if (!other) return { found: false };
+    const item = Array.from(menu.querySelectorAll('[data-group-option]'))
+      .find((node) => node.getAttribute('data-group-option') === other.id);
+    if (!item) return { found: false, targetGroup: other.name };
+    item.click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const station = MR.store.state.stations.find((entry) => entry.name === stationName);
+    const groupOf = station ? MR.store.getGroupOfStation(station.id) : null;
+    const oldGroup = previous ? MR.store.getGroup(previous.id) : null;
+
+    return {
+      found: true,
+      currentMarked: Boolean(currentMarked),
+      previousGroup: previous ? previous.name : '',
+      targetGroup: other.name,
+      addedCount: MR.store.state.stations.length - before,
+      sameStationId: Boolean(stationBefore && station && stationBefore.id === station.id),
+      groupName: groupOf ? groupOf.name : '',
+      inNewGroup: Boolean(groupOf && groupOf.stationIds.indexOf(station.id) !== -1),
+      leftOldGroup: oldGroup ? oldGroup.stationIds.indexOf(station.id) === -1 : true,
+      duplicates: MR.store.state.stations.filter((entry) => entry.name === stationName).length,
+      menuClosed: document.querySelector('.search-add-menu').hidden,
+    };
+  })()`);
+
+  // Закрытие меню: Esc (модалка остаётся), клик вне, одно меню за раз.
+  results.searchGroupClose = await evaluate(`(async () => {
+    const toggles = Array.from(document.querySelectorAll('#search-results [data-search-add-toggle]'));
+    const toggle = toggles[0];
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    toggle.click();
+    await wait(150);
+    let menu = document.querySelector('.search-add-menu');
+    const opened = !menu.hidden;
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await wait(140);
+    const escClosed = menu.hidden;
+    const modalStillOpen = !document.querySelector('#modal-search').hidden;
+    const focusOnToggle = document.activeElement === toggle;
+    const expandedAfterEsc = toggle.getAttribute('aria-expanded');
+
+    toggle.click();
+    await wait(150);
+    const openedAgain = !menu.hidden;
+    document.querySelector('#search-modal-title').click();
+    await wait(140);
+    const outsideClosed = menu.hidden;
+    const modalOpenAfterOutside = !document.querySelector('#modal-search').hidden;
+
+    toggles[0].click();
+    await wait(140);
+    if (toggles[1]) {
+      toggles[1].click();
+      await wait(140);
+    }
+    const openMenus = document.querySelectorAll('.search-add-menu:not([hidden])').length;
+    const secondExpanded = toggles[1] ? toggles[1].getAttribute('aria-expanded') : '';
+    const firstCollapsed = toggles[0].getAttribute('aria-expanded');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await wait(120);
+
+    return {
+      opened: opened,
+      escClosed: escClosed,
+      modalStillOpen: modalStillOpen,
+      focusOnToggle: focusOnToggle,
+      expandedAfterEsc: expandedAfterEsc,
+      openedAgain: openedAgain,
+      outsideClosed: outsideClosed,
+      modalOpenAfterOutside: modalOpenAfterOutside,
+      openMenus: openMenus,
+      secondExpanded: secondExpanded,
+      firstCollapsed: firstCollapsed,
+      finalClosed: document.querySelector('.search-add-menu').hidden,
+    };
+  })()`);
+
+  // «Создать группу…» из меню: закрывает меню и открывает редактор группы.
+  results.searchGroupCreate = await evaluate(`(async () => {
+    const toggle = document.querySelector('#search-results [data-search-add-toggle]');
+    toggle.click();
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    const menu = document.querySelector('.search-add-menu');
+    const create = menu.querySelector('[data-group-create]');
+    const menuBefore = !menu.hidden;
+    create.click();
+    await new Promise((resolve) => setTimeout(resolve, 260));
+
+    const groupModal = document.querySelector('#modal-group');
+    const result = {
+      menuBefore: menuBefore,
+      groupOpen: !groupModal.hidden,
+      menuClosed: menu.hidden,
+      searchStillOpen: !document.querySelector('#modal-search').hidden,
+      title: document.querySelector('#group-modal-title').textContent,
+      nameInput: document.querySelector('#gr-name').value,
+    };
+
+    MR.modal.close('#modal-group');
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    result.groupClosed = groupModal.hidden;
+    result.searchAfterClose = !document.querySelector('#modal-search').hidden;
+    result.focusOnToggle = Boolean(document.activeElement) &&
+      document.activeElement.getAttribute("data-search-add-toggle") !== null;
+    return result;
+  })()`);
+
   await evaluate(`document.querySelector('#modal-search [data-close-modal]').click()`);
   await sleep(250);
   results.searchClosed = await evaluate(`(() => ({
@@ -1676,6 +1911,45 @@ async function main() {
   })()`);
   await screenshot("mobile-stats.png");
   await evaluate(`MR.modal.close('#modal-stats')`);
+
+  // Поиск станций на 390px: меню групп помещается, без горизонтального скролла.
+  await evaluate(`MR.commands.run("search:open")`);
+  await sleep(1400);
+  results.mobileSearchMenu = await evaluate(`(async () => {
+    const card = Array.from(document.querySelectorAll('#search-results .search-card'))
+      .find((node) => node.querySelector('[data-search-add-toggle]'));
+    if (!card) return { found: false };
+    const toggle = card.querySelector('[data-search-add-toggle]');
+    toggle.click();
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const menu = document.querySelector('.search-add-menu');
+    const rect = menu.getBoundingClientRect();
+    const panel = document.querySelector('#modal-search .modal__panel').getBoundingClientRect();
+    return {
+      found: true,
+      modalOpen: !document.querySelector('#modal-search').hidden,
+      menuVisible: !menu.hidden,
+      items: menu.querySelectorAll('[data-group-option]').length,
+      insideViewport: rect.left >= -1 && rect.right <= window.innerWidth + 1,
+      insidePanel: rect.left >= panel.left - 1 && rect.right <= panel.right + 1,
+      verticalInside: rect.top >= -1 && rect.bottom <= window.innerHeight + 1,
+      noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+      menuWidth: Math.round(rect.width),
+      viewport: window.innerWidth,
+    };
+  })()`);
+  await screenshot("mobile-search-menu.png");
+  await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`);
+  await sleep(150);
+  results.mobileSearchMenuClosed = await evaluate(`(() => ({
+    menuClosed: document.querySelector('.search-add-menu').hidden,
+    modalOpen: !document.querySelector('#modal-search').hidden,
+    focusOnToggle: Boolean(document.activeElement &&
+      document.activeElement.getAttribute('data-search-add-toggle') !== null),
+  }))()`);
+  await evaluate(`MR.modal.close('#modal-search')`);
+  await sleep(200);
+
   // На мобильной ширине подвал — колонка: ссылка не должна давать горизонтальный скролл.
   await evaluate(`window.scrollTo(0, document.documentElement.scrollHeight)`);
   await sleep(300);
