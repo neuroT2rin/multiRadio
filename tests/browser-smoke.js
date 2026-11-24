@@ -765,6 +765,94 @@ async function main() {
     };
   })()`);
 
+  // Регрессия: буфер продолжается за старой границей WAV, а не прыгает в live.
+  // К этому месту буфер сброшен stop(), поэтому включаем локальный WAV заново.
+  results.timemachineContinuousRestart = await evaluate(`(() => {
+    const station = MR.store.state.stations[0];
+    MR.audio.playStation(station.id);
+    return { station: station.name, status: MR.store.state.playback.status };
+  })()`);
+
+  let continuousAvailable = 0;
+  for (let i = 0; i < 40; i += 1) {
+    await sleep(250);
+    continuousAvailable = await evaluate(`MR.timemachine.availableSeconds()`);
+    if (continuousAvailable >= 8) break;
+  }
+
+  results.timemachineContinuousStart = await evaluate(`(() => {
+    const ok = MR.timemachine.playFrom(2);
+    const slider = document.querySelector('#timemachine');
+    return {
+      ok: ok,
+      available: Math.round(MR.timemachine.availableSeconds() * 10) / 10,
+      buffered: MR.timemachine.isBuffered(),
+      playing: MR.timemachine.isBufferPlaying(),
+      rewind: Number(MR.timemachine.getRewind().toFixed(2)),
+      status: MR.store.state.playback.status,
+      liveVisible: !document.querySelector('#timemachine-live').hidden,
+      sliderMax: Number(slider.max),
+    };
+  })()`);
+
+  // Первый WAV был ≈2 с: через 3 с старая реализация уже ушла бы в live.
+  await sleep(3000);
+  results.timemachineContinuousMid = await evaluate(`(() => ({
+    buffered: MR.timemachine.isBuffered(),
+    status: MR.store.state.playback.status,
+    rewind: Number(MR.timemachine.getRewind().toFixed(2)),
+  }))()`);
+
+  // Слушаем дольше длины первого сегмента (в сумме ≈9.3 с): лента должна
+  // продолжаться без пропусков, эфир — оставаться заглушённым.
+  await sleep(6300);
+  results.timemachineContinuous = await evaluate(`(() => {
+    const analysis = MR.analyser.read(performance.now());
+    const slider = document.querySelector('#timemachine');
+    const rewind = Number(MR.timemachine.getRewind().toFixed(2));
+    const buffered = MR.timemachine.isBuffered();
+    const status = MR.store.state.playback.status;
+    return {
+      buffered: buffered,
+      playing: MR.timemachine.isBufferPlaying(),
+      status: status,
+      streamState: document.querySelector('#stream-status').dataset.state,
+      rewind: rewind,
+      liveVisible: !document.querySelector('#timemachine-live').hidden,
+      liveSilent: analysis.silent,
+      liveLevel: Number(analysis.level.toFixed(3)),
+      sliderMax: Number(slider.max),
+      sliderValue: Number(slider.value),
+      ok: buffered && status === "playing" && rewind >= 1.5 && rewind <= 4,
+    };
+  })()`);
+
+  results.timemachineContinuousReturn = await evaluate(`(() => {
+    MR.timemachine.returnLive();
+    const bufferedAfter = MR.timemachine.isBuffered();
+    const playingAfter = MR.timemachine.isBufferPlaying();
+    return {
+      bufferedAfter: bufferedAfter,
+      playingAfter: playingAfter,
+      status: MR.store.state.playback.status,
+    };
+  })()`);
+
+  // LIVE снова включает живой эфир: анализатор перестаёт видеть тишину.
+  await sleep(500);
+  results.timemachineContinuousLiveBack = await evaluate(`(() => {
+    const analysis = MR.analyser.read(performance.now());
+    const result = {
+      buffered: MR.timemachine.isBuffered(),
+      status: MR.store.state.playback.status,
+      silent: analysis.silent,
+      level: Number(analysis.level.toFixed(3)),
+    };
+    MR.audio.stop();
+    result.statusAfterStop = MR.store.state.playback.status;
+    return result;
+  })()`);
+
   // Настройки буфера: выключение освобождает память, длительность влияет на окно.
   await evaluate(`document.querySelector('[data-command="settings:open"]').click()`);
   await sleep(250);
