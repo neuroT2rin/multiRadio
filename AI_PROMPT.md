@@ -349,7 +349,7 @@ document.querySelector("#stations-list").appendChild(row);
 
 ## 7. DOM- и CSS-контракт
 
-Разметка — `index.html` (≈580 строк). Часто используемые id:
+Разметка — `index.html` (≈700 строк). Часто используемые id:
 
 ```text
 Шапка:    app-header, main-nav, nav-toggle, viz-toggle, theme-toggle,
