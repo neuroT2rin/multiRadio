@@ -69,6 +69,8 @@
         stationView: "list",
         theme: "dark",
         compatMode: false,
+        bufferEnabled: true,
+        bufferMinutes: config.timemachine.defaultMinutes,
       },
 
       loadedAt: Date.now(),
@@ -314,6 +316,10 @@
     const miniMode = config.miniVisualizerModes.indexOf(ui.miniMode) !== -1 ? ui.miniMode : "wave";
     const stationView = config.stationViews.indexOf(ui.stationView) !== -1 ? ui.stationView : "list";
     const theme = config.themes.indexOf(ui.theme) !== -1 ? ui.theme : "dark";
+    const bufferMinutesValue = Number(ui.bufferMinutes);
+    const bufferMinutes = config.timemachine.options.indexOf(bufferMinutesValue) !== -1
+      ? bufferMinutesValue
+      : config.timemachine.defaultMinutes;
 
     state.stations = stations;
     state.groups = groups;
@@ -330,6 +336,8 @@
       stationView: stationView,
       theme: theme,
       compatMode: Boolean(ui.compatMode),
+      bufferEnabled: ui.bufferEnabled !== false,
+      bufferMinutes: bufferMinutes,
     };
     state.filters = { favoritesOnly: false, groupId: null, query: "" };
     state.health = {};
@@ -395,6 +403,8 @@
         stationView: state.ui.stationView,
         theme: state.ui.theme,
         compatMode: state.ui.compatMode,
+        bufferEnabled: state.ui.bufferEnabled,
+        bufferMinutes: state.ui.bufferMinutes,
       },
     };
   }
@@ -988,6 +998,26 @@
     return state.ui.compatMode;
   }
 
+  /** Включает/выключает запись буфера эфира. Возвращает фактическое значение. */
+  function setBufferEnabled(enabled) {
+    state.ui = Object.assign({}, state.ui, { bufferEnabled: Boolean(enabled) });
+    emit("ui");
+    save();
+    return state.ui.bufferEnabled;
+  }
+
+  /** Длительность буфера в минутах. Недопустимое значение → defaultMinutes. */
+  function setBufferMinutes(minutes) {
+    const numeric = Number(minutes);
+    const value = config.timemachine.options.indexOf(numeric) !== -1
+      ? numeric
+      : config.timemachine.defaultMinutes;
+    state.ui = Object.assign({}, state.ui, { bufferMinutes: value });
+    emit("ui");
+    save();
+    return state.ui.bufferMinutes;
+  }
+
   /* ------------------------------------------------------------------------
      Импорт / экспорт / сброс
      ------------------------------------------------------------------------ */
@@ -1219,6 +1249,8 @@
     setStationView: setStationView,
     setTheme: setTheme,
     setCompatMode: setCompatMode,
+    setBufferEnabled: setBufferEnabled,
+    setBufferMinutes: setBufferMinutes,
 
     exportData: exportData,
     importData: importData,

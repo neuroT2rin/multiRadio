@@ -14,6 +14,8 @@
   let bgCheckbox = null;
   let modeSelect = null;
   let compatCheckbox = null;
+  let bufferCheckbox = null;
+  let bufferMinutesSelect = null;
   let fileInput = null;
   let versionLabel = null;
   let storageLabel = null;
@@ -75,6 +77,14 @@
     if (bgCheckbox) bgCheckbox.checked = Boolean(store.state.ui.bgEnabled);
     if (modeSelect) modeSelect.value = store.state.ui.mode;
     if (compatCheckbox) compatCheckbox.checked = Boolean(store.state.ui.compatMode);
+
+    const bufferEnabled = store.state.ui.bufferEnabled !== false;
+    if (bufferCheckbox) bufferCheckbox.checked = bufferEnabled;
+    if (bufferMinutesSelect) {
+      bufferMinutesSelect.value = String(store.state.ui.bufferMinutes);
+      bufferMinutesSelect.disabled = !bufferEnabled;
+    }
+
     renderStorage();
   }
 
@@ -230,6 +240,8 @@
     bgCheckbox = dom.$("#setting-bg");
     modeSelect = dom.$("#setting-mode");
     compatCheckbox = dom.$("#setting-compat");
+    bufferCheckbox = dom.$("#setting-buffer");
+    bufferMinutesSelect = dom.$("#setting-buffer-minutes");
     fileInput = dom.$("#import-file");
     versionLabel = dom.$("#settings-version");
     storageLabel = dom.$("#settings-storage");
@@ -301,6 +313,24 @@
       });
     }
 
+    if (bufferCheckbox) {
+      bufferCheckbox.addEventListener("change", function () {
+        const enabled = store.setBufferEnabled(bufferCheckbox.checked);
+        if (bufferMinutesSelect) bufferMinutesSelect.disabled = !enabled;
+        MR.toast.info(
+          enabled
+            ? "Буфер эфира включён: храним последние " + store.state.ui.bufferMinutes + " мин."
+            : "Буфер эфира выключен: память освобождена."
+        );
+      });
+    }
+
+    if (bufferMinutesSelect) {
+      bufferMinutesSelect.addEventListener("change", function () {
+        store.setBufferMinutes(Number(bufferMinutesSelect.value));
+      });
+    }
+
     if (fileInput) {
       fileInput.addEventListener("change", function (event) {
         const file = event.target.files && event.target.files[0];
@@ -313,6 +343,11 @@
       if (bgCheckbox) bgCheckbox.checked = Boolean(store.state.ui.bgEnabled);
       if (modeSelect) modeSelect.value = store.state.ui.mode;
       if (compatCheckbox) compatCheckbox.checked = Boolean(store.state.ui.compatMode);
+      if (bufferCheckbox) bufferCheckbox.checked = store.state.ui.bufferEnabled !== false;
+      if (bufferMinutesSelect) {
+        bufferMinutesSelect.value = String(store.state.ui.bufferMinutes);
+        bufferMinutesSelect.disabled = store.state.ui.bufferEnabled === false;
+      }
     });
 
     syncControls();
