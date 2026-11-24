@@ -419,7 +419,79 @@ async function main() {
     return { open: open, closed: document.querySelector('#modal-import').hidden };
   })()`);
 
+  // Глобальный drag-and-drop: оверлей при удержании файла над окном
+  await evaluate(`(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File(["notes"], "notes.txt", { type: "text/plain" }));
+    const zone = document.querySelector('#import-drop');
+    zone.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    zone.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  })()`);
+  await sleep(100);
+  results.dropOverlay = await evaluate(`(() => {
+    const overlay = document.querySelector('#drop-overlay');
+    const style = getComputedStyle(overlay);
+    return {
+      visible: !overlay.hidden,
+      display: style.display,
+      bodyClass: document.body.classList.contains('is-file-dragging'),
+      zIndex: style.zIndex,
+      icon: (overlay.querySelector('.drop-overlay__icon') || {}).textContent || '',
+      title: (overlay.querySelector('.drop-overlay__title') || {}).textContent || '',
+      hint: (overlay.querySelector('.drop-overlay__hint') || {}).textContent || '',
+      dropHint: document.querySelector('#import-drop').classList.contains('is-dragover'),
+    };
+  })()`);
+  await screenshot("drop-overlay.png");
+
+  results.dropOverlayLeave = await evaluate(`(() => {
+    document.body.dispatchEvent(new DragEvent('dragleave', { bubbles: true, cancelable: true }));
+    const overlay = document.querySelector('#drop-overlay');
+    return {
+      hidden: overlay.hidden,
+      display: getComputedStyle(overlay).display,
+      bodyClass: document.body.classList.contains('is-file-dragging'),
+      dropHint: document.querySelector('#import-drop').classList.contains('is-dragover'),
+      ariaHidden: overlay.getAttribute('aria-hidden'),
+    };
+  })()`);
+
   await evaluate(`document.querySelector('#modal-settings [data-close-modal]').click()`);
+  await sleep(150);
+
+  // Не-JSON: предупреждение, без изменения данных и без модалки импорта
+  results.dropNonJson = await evaluate(`(() => {
+    const before = MR.store.state.stations.length;
+    const dt = new DataTransfer();
+    dt.items.add(new File(["notes"], "notes.txt", { type: "text/plain" }));
+    document.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    const toast = document.querySelector('#toast-region .toast:last-child');
+    return {
+      before: before,
+      after: MR.store.state.stations.length,
+      overlayHidden: document.querySelector('#drop-overlay').hidden,
+      importHidden: document.querySelector('#modal-import').hidden,
+      toastWarnsJson: Boolean(toast && toast.textContent.includes('JSON')),
+    };
+  })()`);
+
+  // JSON в любое место страницы: открывается выбор режима импорта
+  await evaluate(`(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([JSON.stringify({ version: 2, stations: [], groups: [], favorites: [] })], "settings.json", { type: "application/json" }));
+    document.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  })()`);
+  await sleep(350);
+  results.dropJsonGlobal = await evaluate(`(() => {
+    const open = !document.querySelector('#modal-import').hidden;
+    document.querySelector('#import-cancel').click();
+    return {
+      open: open,
+      closed: document.querySelector('#modal-import').hidden,
+      overlayHidden: document.querySelector('#drop-overlay').hidden,
+      settingsClosed: document.querySelector('#modal-settings').hidden,
+    };
+  })()`);
 
   // Импорт: слияние не стирает текущие станции и группы
   results.importMerge = await evaluate(`(() => {
