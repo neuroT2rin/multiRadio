@@ -262,8 +262,8 @@
 
     <div class="content-grid">
       <div class="content-main">
-        <!-- Станции и эквалайзер -->
-        <section class="card views-card" aria-label="Станции и эквалайзер">
+        <!-- Станции, эквалайзер и записи -->
+        <section class="card views-card" aria-label="Станции, эквалайзер и записи">
           <div class="view-tabs" role="tablist" aria-label="Разделы радио">
             <button class="view-tab" type="button" role="tab" id="tab-stations" aria-selected="true" aria-controls="panel-stations" data-command="view:stations">
               📻 Все станции
@@ -273,6 +273,9 @@
             </button>
             <button class="view-tab" type="button" role="tab" id="tab-equalizer" aria-selected="false" aria-controls="panel-equalizer" data-command="view:equalizer">
               🎛 Эквалайзер
+            </button>
+            <button class="view-tab" type="button" role="tab" id="tab-recordings" aria-selected="false" aria-controls="panel-recordings" data-command="view:recordings">
+              🗂 Записи
             </button>
           </div>
 
@@ -326,6 +329,26 @@
             <div class="eq-presets" id="eq-presets" role="group" aria-label="Пресеты эквалайзера"></div>
             <div class="eq-controls" id="eq-controls"></div>
             <p class="eq-hint" id="eq-hint">Эквалайзер работает, когда поток отдаёт CORS-заголовки. В режиме совместимости полосы недоступны.</p>
+          </div>
+
+          <div class="view-panel" id="panel-recordings" role="tabpanel" aria-labelledby="tab-recordings" hidden>
+            <div class="recordings-head">
+              <div>
+                <h2 class="section-title">Записи эфира</h2>
+                <p class="section-subtitle">Личные копии фрагментов эфира. Хранятся только в этом браузере.</p>
+              </div>
+              <div class="recordings-head__actions">
+                <span class="toolbar__count" id="recordings-count">0 записей</span>
+                <button class="btn btn-outline btn-sm" type="button" id="recordings-clear" data-command="recordings:clear" hidden>Очистить всё</button>
+              </div>
+            </div>
+            <p class="recordings-fallback" id="recordings-fallback" hidden>Записи живут до перезагрузки: IndexedDB недоступен.</p>
+            <p class="recordings-loading" id="recordings-loading" hidden>Загружаем архив…</p>
+            <ul class="recordings-list" id="recordings-list" aria-label="Сохранённые записи эфира"></ul>
+            <div class="empty-state" id="recordings-empty" hidden>
+              <p class="empty-state__title">Архив пока пуст</p>
+              <p class="empty-state__text">Включите радио и нажмите ⏺ в плеере — запись появится здесь.</p>
+            </div>
           </div>
         </section>
 
@@ -825,6 +848,7 @@
   <script src="js/services/health.js"></script>
   <script src="js/services/radio-search.js"></script>
   <script src="js/services/stats.js"></script>
+  <script src="js/services/recordings.js"></script>
   <script src="js/services/recorder.js"></script>
   <script src="js/services/timemachine.js"></script>
   <script src="js/services/share.js"></script>
@@ -847,6 +871,7 @@
   <script src="js/ui/sleep-timer.js"></script>
   <script src="js/ui/voice-search.js"></script>
   <script src="js/ui/recorder.js"></script>
+  <script src="js/ui/recordings.js"></script>
   <script src="js/ui/timemachine.js"></script>
   <script src="js/ui/theme.js"></script>
   <!-- Визуализация -->

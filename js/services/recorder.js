@@ -1,9 +1,10 @@
 /**
- * services/recorder.js — запись текущего эфира в файл через MediaRecorder.
+ * services/recorder.js — запись текущего эфира через MediaRecorder.
  *
  * Записываем звук после анализатора (с эквалайзером), поэтому файл совпадает
- * с тем, что слышно. Это личная копия эфира: приложение не загружает её
- * никуда и не хранит после скачивания.
+ * с тем, что слышно. Это личная копия эфира: она уходит в локальный архив
+ * (`MR.recordings`), никуда не загружается и не скачивается автоматически —
+ * скачать файл можно вручную во вкладке «Записи».
  */
 (function (global) {
   "use strict";
@@ -23,7 +24,7 @@
   let chunks = [];
   let startedAt = 0;
   let mimeType = "";
-  let stationSlug = "radio";
+  let station = { id: "", name: "" };
   let limitTimer = null;
 
   function supported() {
@@ -38,44 +39,23 @@
     return "";
   }
 
-  function extensionFor(type) {
-    if (type.indexOf("ogg") !== -1) return "ogg";
-    if (type.indexOf("mp4") !== -1) return "m4a";
-    return "webm";
-  }
-
-  function stamp(date) {
-    const pad = function (value) { return value < 10 ? "0" + value : String(value); };
-    return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate()) +
-      "-" + pad(date.getHours()) + pad(date.getMinutes());
-  }
-
-  function download(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 15000);
-  }
-
   function cleanup() {
     if (limitTimer) clearInterval(limitTimer);
     limitTimer = null;
     recorder = null;
     startedAt = 0;
     chunks = [];
+    station = { id: "", name: "" };
     store.emit("record");
   }
 
   function finish() {
     const type = mimeType || "audio/webm";
     const blob = new Blob(chunks, { type: type });
-    const seconds = startedAt ? Math.round((Date.now() - startedAt) / 1000) : 0;
-    const filename = "multiradio-" + stationSlug + "-" + stamp(new Date()) +
-      "." + extensionFor(type);
+    const durationMs = startedAt ? Date.now() - startedAt : 0;
+    const current = store.getCurrentStation();
+    const stationId = station.id || (current ? String(current.id) : "");
+    const stationName = station.name || (current ? String(current.name) : "Радио");
 
     cleanup();
 
@@ -87,10 +67,38 @@
       return;
     }
 
-    download(blob, filename);
-    store.emit("notice", {
-      level: "success",
-      message: "Запись сохранена (" + seconds + " с): " + filename,
+    const entry = {
+      id: MR.utils.uid("rec"),
+      stationId: stationId,
+      stationName: stationName,
+      createdAt: Date.now(),
+      durationMs: durationMs,
+      mimeType: type,
+      size: blob.size,
+      blob: blob,
+    };
+
+    MR.recordings.save(entry).then(function (result) {
+      if (result && result.ok) {
+        store.emit("notice", {
+          level: "success",
+          message: "Запись сохранена в архив",
+        });
+        store.emit("record:saved", result.entry || entry);
+        return;
+      }
+
+      store.emit("notice", {
+        level: "error",
+        message: result && result.quota
+          ? "Не хватает места в архиве — удалите старые записи во вкладке «Записи»."
+          : "Не удалось сохранить запись в архив. Попробуйте ещё раз.",
+      });
+    }).catch(function () {
+      store.emit("notice", {
+        level: "error",
+        message: "Не удалось сохранить запись в архив. Попробуйте ещё раз.",
+      });
     });
   }
 
@@ -137,8 +145,11 @@
 
     chunks = [];
     startedAt = Date.now();
-    const station = store.getCurrentStation();
-    stationSlug = station ? String(station.id).replace(/[^a-z0-9-]/gi, "") : "radio";
+    const current = store.getCurrentStation();
+    station = {
+      id: current ? String(current.id) : "",
+      name: current ? String(current.name) : "Радио",
+    };
 
     recorder.addEventListener("dataavailable", function (event) {
       if (event.data && event.data.size > 0) chunks.push(event.data);

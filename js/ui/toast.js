@@ -21,6 +21,17 @@
     }, 220);
   }
 
+  /**
+   * Тосты, которые ещё не начали уезжать. Уходящий тост остаётся в DOM
+   * ~220 мс ради анимации, поэтому считать `children.length` нельзя:
+   * иначе `while` в show() не уменьшает длину и зависает.
+   */
+  function activeToasts() {
+    return Array.prototype.filter.call(region.children, function (node) {
+      return !node.classList.contains("is-leaving");
+    });
+  }
+
   function show(message, options) {
     if (!region) return function () {};
     if (!message) return function () {};
@@ -42,8 +53,8 @@
 
     region.appendChild(toast);
 
-    while (region.children.length > LIMIT) {
-      dismiss(region.firstElementChild);
+    while (activeToasts().length > LIMIT) {
+      dismiss(activeToasts()[0]);
     }
 
     let timer = null;

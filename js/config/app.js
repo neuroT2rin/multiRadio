@@ -12,7 +12,7 @@
     storageKey: "multiradio:state:v2",
     statsKey: "multiradio:stats:v1",
 
-    views: ["stations", "favorites", "equalizer"],
+    views: ["stations", "favorites", "equalizer", "recordings"],
     stationViews: ["list", "grid"],
     themes: ["dark", "light"],
     visualizerModes: ["spectrum", "aurora", "orbit", "tunnel", "spiral", "voice"],
