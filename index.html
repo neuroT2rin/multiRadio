@@ -486,6 +486,7 @@
         <p class="form__error" id="station-form-error" role="alert" hidden></p>
         <div class="form__actions">
           <button class="btn btn-danger btn-ghost" type="button" id="station-delete" hidden>Удалить станцию</button>
+          <button class="btn btn-outline" type="button" id="station-share" data-command="station:share" hidden>🔗 Ссылка</button>
           <span class="form__spacer"></span>
           <button class="btn btn-ghost" type="button" data-close-modal>Отмена</button>
           <button class="btn btn-primary" type="submit" id="station-submit">Добавить</button>
@@ -519,6 +520,7 @@
         <p class="form__error" id="group-form-error" role="alert" hidden></p>
         <div class="form__actions">
           <button class="btn btn-danger btn-ghost" type="button" id="group-delete" hidden>Удалить группу</button>
+          <button class="btn btn-outline" type="button" id="group-share" data-command="group:share" hidden>🔗 Ссылка</button>
           <span class="form__spacer"></span>
           <button class="btn btn-ghost" type="button" data-close-modal>Отмена</button>
           <button class="btn btn-primary" type="submit" id="group-submit">Создать</button>
@@ -646,6 +648,34 @@
     </div>
   </div>
 
+  <!-- Передача станции или группы по ссылке -->
+  <div class="modal" id="modal-share" role="dialog" aria-modal="true" aria-labelledby="share-title" aria-describedby="share-hint" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__panel" role="document">
+      <header class="modal__header">
+        <div>
+          <h2 class="modal__title" id="share-title">Ссылка на станцию</h2>
+          <p class="modal__subtitle" id="share-subtitle"></p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+      </header>
+      <div class="modal__body">
+        <div class="share-preview" id="share-preview"></div>
+        <p class="share-warning" id="share-warning" role="alert" hidden></p>
+        <div class="share-link-row" id="share-link-row" hidden>
+          <label class="field__label" for="share-link">Ссылка</label>
+          <input class="input share-link" type="text" id="share-link" readonly autocomplete="off" spellcheck="false" />
+        </div>
+        <p class="share-hint" id="share-hint"></p>
+      </div>
+      <footer class="modal__footer">
+        <button class="btn btn-ghost" type="button" id="share-cancel" data-close-modal>Отмена</button>
+        <button class="btn btn-outline" type="button" id="share-copy" hidden>Копировать</button>
+        <button class="btn btn-primary" type="button" id="share-add" hidden>Добавить</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Импорт: заменить или объединить -->
   <div class="modal" id="modal-import" role="dialog" aria-modal="true" aria-labelledby="import-title" hidden>
     <div class="modal__backdrop" data-close-modal></div>
@@ -695,6 +725,7 @@
   <script src="js/services/stats.js"></script>
   <script src="js/services/recorder.js"></script>
   <script src="js/services/timemachine.js"></script>
+  <script src="js/services/share.js"></script>
   <!-- Интерфейс -->
   <script src="js/ui/toast.js"></script>
   <script src="js/ui/modal.js"></script>

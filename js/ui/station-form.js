@@ -23,6 +23,7 @@
   let subtitle = null;
   let submitButton = null;
   let deleteButton = null;
+  let shareButton = null;
   let groupSelect = null;
   let summary = null;
   let sourcesList = null;
@@ -238,6 +239,11 @@
       : "У каждой ссылки свой битрейт — играет лучший из доступных.";
     submitButton.textContent = station ? "Сохранить" : "Добавить";
     deleteButton.hidden = !station;
+    if (shareButton) {
+      shareButton.hidden = !station;
+      if (station) shareButton.dataset.stationId = station.id;
+      else delete shareButton.dataset.stationId;
+    }
 
     const group = station ? store.getGroupOfStation(station.id) : null;
     const preselectedGroup = station ? (group ? group.id : "") : (store.state.filters.groupId || "");
@@ -348,6 +354,7 @@
     subtitle = dom.$("#station-modal-subtitle");
     submitButton = dom.$("#station-submit");
     deleteButton = dom.$("#station-delete");
+    shareButton = dom.$("#station-share");
     groupSelect = dom.$("#st-group");
     summary = dom.$("#station-form-error");
     sourcesList = dom.$("#st-sources");
