@@ -148,6 +148,9 @@
             Данные <span class="nav-btn__chev" aria-hidden="true">▾</span>
           </button>
           <div class="nav-menu">
+            <button class="nav-item" type="button" data-command="stats:open">
+              <span class="nav-item__ico" aria-hidden="true">📊</span> Статистика
+            </button>
             <p class="nav-menu__label">Настройки</p>
             <button class="nav-item" type="button" data-command="settings:open">
               <span class="nav-item__ico" aria-hidden="true">⚙</span> Настройки приложения
@@ -372,6 +375,11 @@
               <span class="quick-action__title">Станция</span>
               <span class="quick-action__hint">Свой поток и резервы</span>
             </button>
+            <button class="quick-action" type="button" data-command="stats:open">
+              <span class="quick-action__ico" aria-hidden="true">📊</span>
+              <span class="quick-action__title">Статистика</span>
+              <span class="quick-action__hint">Время прослушивания</span>
+            </button>
             <button class="quick-action" type="button" data-command="settings:open">
               <span class="quick-action__ico" aria-hidden="true">⚙</span>
               <span class="quick-action__title">Настройки</span>
@@ -398,26 +406,6 @@
           </div>
         </section>
 
-        <!-- Статистика прослушивания -->
-        <section class="card stats-card" aria-labelledby="stats-title">
-          <div class="section-head">
-            <div>
-              <h2 class="section-title" id="stats-title">Статистика</h2>
-              <p class="section-subtitle">Время прослушивания по станциям и жанрам.</p>
-            </div>
-            <button class="btn btn-ghost btn-sm" type="button" data-command="stats:reset">Сбросить</button>
-          </div>
-          <p class="stats-total" id="stats-total">Пока нет данных</p>
-          <div class="stats-block">
-            <p class="stats-block__title">Станции</p>
-            <ul class="stats-list" id="stats-stations"></ul>
-          </div>
-          <div class="stats-block">
-            <p class="stats-block__title">Жанры</p>
-            <ul class="stats-list" id="stats-genres"></ul>
-          </div>
-          <p class="stats-empty" id="stats-empty" hidden>Пока нет данных — включите радио.</p>
-        </section>
       </aside>
     </div>
   </main>
@@ -625,6 +613,37 @@
           </dl>
           <p class="settings-hint">Данные сохраняются в localStorage браузера. Приложение работает без сервера: откройте index.html напрямую.</p>
         </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Статистика прослушивания -->
+  <div class="modal" id="modal-stats" role="dialog" aria-modal="true" aria-labelledby="stats-modal-title" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__panel modal__panel--wide" role="document">
+      <header class="modal__header">
+        <div>
+          <h2 class="modal__title" id="stats-modal-title">Статистика</h2>
+          <p class="modal__subtitle">Время прослушивания по станциям и жанрам.</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+      </header>
+      <div class="modal__body stats-panel">
+        <div class="stats-panel__head">
+          <p class="stats-total" id="stats-total">Пока нет данных</p>
+          <button class="btn btn-ghost btn-sm" type="button" data-command="stats:reset">Сбросить</button>
+        </div>
+        <div class="stats-panel__grid">
+          <div class="stats-block">
+            <p class="stats-block__title">Станции</p>
+            <ul class="stats-list" id="stats-stations"></ul>
+          </div>
+          <div class="stats-block">
+            <p class="stats-block__title">Жанры</p>
+            <ul class="stats-list" id="stats-genres"></ul>
+          </div>
+        </div>
+        <p class="stats-empty" id="stats-empty" hidden>Пока нет данных — включите радио, и время начнёт копиться.</p>
       </div>
     </div>
   </div>

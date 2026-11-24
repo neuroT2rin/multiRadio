@@ -833,6 +833,85 @@ async function main() {
     };
   })()`);
 
+  // Панель статистики: быстрое действие открывает модалку, закрытие работает.
+  results.statsPanelQuick = await evaluate(`(async () => {
+    const modal = document.querySelector('#modal-stats');
+    const quick = document.querySelector('.quick-actions [data-command="stats:open"]');
+    const sidebarCard = Boolean(document.querySelector('.content-side .stats-card'));
+    quick.click();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const opened = !modal.hidden;
+    const total = document.querySelector('#stats-total').textContent;
+    const focusInside = modal.contains(document.activeElement);
+    document.querySelector('#modal-stats .modal__close').click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    return {
+      button: Boolean(quick),
+      sidebarCard: sidebarCard,
+      opened: opened,
+      total: total,
+      focusInside: focusInside,
+      closed: modal.hidden,
+    };
+  })()`);
+
+  // Меню «Данные»: «Статистика» — первый пункт.
+  results.statsPanelMenu = await evaluate(`(async () => {
+    const group = [...document.querySelectorAll('.nav-group')]
+      .find((item) => item.querySelector('.nav-btn').textContent.includes('Данные'));
+    group.querySelector('.nav-btn').click();
+    const first = group.querySelector('.nav-menu .nav-item');
+    const menuOpen = group.classList.contains('is-open');
+    const firstIsStats = first.dataset.command === 'stats:open';
+    first.click();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    return {
+      menuOpen: menuOpen,
+      firstIsStats: firstIsStats,
+      opened: !document.querySelector('#modal-stats').hidden,
+      menuClosed: !group.classList.contains('is-open'),
+    };
+  })()`);
+  await screenshot("stats-panel.png");
+
+  // Светлая тема: панель остаётся читаемой и не теряет фон.
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  await sleep(300);
+  results.statsPanelLight = await evaluate(`(() => {
+    const panel = document.querySelector('#modal-stats .modal__panel');
+    return {
+      theme: document.documentElement.dataset.theme,
+      lightBg: getComputedStyle(panel).backgroundImage.includes('255, 255, 255'),
+      open: !document.querySelector('#modal-stats').hidden,
+    };
+  })()`);
+  await screenshot("stats-panel-light.png");
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  await sleep(200);
+
+  // Сброс: подтверждение, значения обнулились, панель осталась открытой.
+  results.statsPanelReset = await evaluate(`(async () => {
+    const modal = document.querySelector('#modal-stats');
+    document.querySelector('#modal-stats [data-command="stats:reset"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const confirmOpen = !document.querySelector('#modal-confirm').hidden;
+    document.querySelector('#confirm-ok').click();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const summary = MR.stats.getSummary();
+    const result = {
+      confirmOpen: confirmOpen,
+      confirmClosed: document.querySelector('#modal-confirm').hidden,
+      panelOpen: !modal.hidden,
+      totalSeconds: summary.totalSeconds,
+      stations: summary.stations.length,
+      genres: summary.genres.length,
+      totalText: document.querySelector('#stats-total').textContent,
+      emptyVisible: !document.querySelector('#stats-empty').hidden,
+    };
+    MR.modal.close('#modal-stats');
+    return result;
+  })()`);
+
   // Мобильный вид
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
@@ -861,6 +940,24 @@ async function main() {
   }))()`);
   await screenshot("mobile-station-form.png");
   await evaluate(`MR.modal.close('#modal-station')`);
+
+  // Панель статистики на 390px: одна колонка, без горизонтального скролла.
+  await evaluate(`MR.commands.run("stats:open")`);
+  await sleep(250);
+  results.mobileStats = await evaluate(`(() => {
+    const modal = document.querySelector('#modal-stats');
+    const panel = modal.querySelector('.modal__panel');
+    const grid = document.querySelector('.stats-panel__grid');
+    return {
+      open: !modal.hidden,
+      noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+      columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+      panelWidth: Math.round(panel.getBoundingClientRect().width),
+      viewport: window.innerWidth,
+    };
+  })()`);
+  await screenshot("mobile-stats.png");
+  await evaluate(`MR.modal.close('#modal-stats')`);
 
   results.consoleErrors = consoleErrors;
   results.exceptions = exceptions;

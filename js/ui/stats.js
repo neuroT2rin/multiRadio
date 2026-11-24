@@ -1,5 +1,6 @@
 /**
- * ui/stats.js — панель статистики прослушивания (станции и жанры).
+ * ui/stats.js — панель статистики прослушивания (станции и жанры)
+ * в модальном окне #modal-stats.
  */
 (function (global) {
   "use strict";
@@ -33,7 +34,7 @@
       : "Пока нет данных";
 
     if (stationsList) {
-      stationsList.innerHTML = "";
+      stationsList.textContent = "";
       summary.stations.forEach(function (item) {
         stationsList.appendChild(dom.el("li", { class: "stats-row" },
           dom.el("span", { class: "stats-row__name", text: item.emoji + " " + item.name }),
@@ -43,7 +44,7 @@
     }
 
     if (genresList) {
-      genresList.innerHTML = "";
+      genresList.textContent = "";
       const max = summary.genres.length ? summary.genres[0].seconds : 0;
 
       summary.genres.forEach(function (item) {
@@ -68,6 +69,12 @@
     }
   }
 
+  /** Открывает панель со свежими данными. */
+  function open() {
+    render();
+    MR.modal.open("#modal-stats");
+  }
+
   async function reset() {
     const confirmed = await MR.modal.confirm({
       title: "Сбросить статистику?",
@@ -89,6 +96,7 @@
     if (!totalLabel) return;
 
     MR.commands.registerMany({
+      "stats:open": open,
       "stats:reset": reset,
     });
 
@@ -100,6 +108,7 @@
 
   MR.statsUI = {
     init: init,
+    open: open,
     render: render,
   };
 })(window);
