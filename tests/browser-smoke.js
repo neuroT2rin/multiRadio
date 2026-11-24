@@ -817,6 +817,74 @@ async function main() {
     };
   })()`);
 
+  // Автопроверка станций: тумблер, сохранение и ручной запуск при выключенной авто.
+  // Таймаут проверки источника уменьшен только на время теста, чтобы не ждать сеть.
+  await evaluate(`document.querySelector('[data-command="settings:open"]').click()`);
+  await sleep(250);
+  results.autoHealthCheck = await evaluate(`(async () => {
+    const checkbox = document.querySelector('#setting-auto-health');
+    const modal = document.querySelector('#modal-settings');
+    const initial = {
+      modalOpen: !modal.hidden,
+      exists: Boolean(checkbox),
+      checked: checkbox ? checkbox.checked : null,
+      state: MR.store.state.ui.autoHealthCheck,
+      serialized: MR.store.serialize().ui.autoHealthCheck,
+    };
+
+    const probeTimeout = MR.config.health.probeTimeoutMs;
+    MR.config.health.probeTimeoutMs = 700;
+
+    try {
+      // Ручная проверка запускается при включённой настройке...
+      const manualPromise = MR.health.run({ manual: true }).then(
+        (value) => ({ settled: value }),
+        (error) => ({ error: String((error && error.message) || error) })
+      );
+      const runningAtStart = MR.health.isRunning;
+
+      // ...и выключение автопроверки не должно её прервать.
+      if (checkbox) {
+        checkbox.checked = false;
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const toast = document.querySelector('#toast-region .toast:last-child');
+      const offDuringRun = {
+        state: MR.store.state.ui.autoHealthCheck,
+        checkbox: checkbox ? checkbox.checked : null,
+        serialized: MR.store.serialize().ui.autoHealthCheck,
+        running: MR.health.isRunning,
+        infoToast: Boolean(toast && toast.textContent.includes('Автопроверка')),
+      };
+
+      const manual = await manualPromise;
+
+      if (checkbox) {
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      return {
+        initial: initial,
+        runningAtStart: runningAtStart,
+        offDuringRun: offDuringRun,
+        manual: manual,
+        progressAfter: { running: MR.store.state.healthProgress.running },
+        on: {
+          state: MR.store.state.ui.autoHealthCheck,
+          checkbox: checkbox ? checkbox.checked : null,
+          serialized: MR.store.serialize().ui.autoHealthCheck,
+        },
+      };
+    } finally {
+      MR.config.health.probeTimeoutMs = probeTimeout;
+      document.querySelector('#modal-settings [data-close-modal]').click();
+    }
+  })()`);
+
   results.recorder = await evaluate(`(() => ({
     supported: MR.recorder.supported(),
     button: Boolean(document.querySelector('#record-btn')),

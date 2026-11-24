@@ -72,6 +72,7 @@
         compatMode: false,
         bufferEnabled: true,
         bufferMinutes: config.timemachine.defaultMinutes,
+        autoHealthCheck: true,
       },
 
       loadedAt: Date.now(),
@@ -368,6 +369,7 @@
       compatMode: Boolean(ui.compatMode),
       bufferEnabled: ui.bufferEnabled !== false,
       bufferMinutes: bufferMinutes,
+      autoHealthCheck: ui.autoHealthCheck !== false,
     };
     state.filters = { favoritesOnly: false, groupId: null, query: "" };
     state.health = {};
@@ -435,6 +437,7 @@
         compatMode: state.ui.compatMode,
         bufferEnabled: state.ui.bufferEnabled,
         bufferMinutes: state.ui.bufferMinutes,
+        autoHealthCheck: state.ui.autoHealthCheck,
       },
     };
   }
@@ -1155,6 +1158,14 @@
     return state.ui.bufferMinutes;
   }
 
+  /** Включает/выключает автоматическую проверку станций. Возвращает фактическое значение. */
+  function setAutoHealthCheck(enabled) {
+    state.ui = Object.assign({}, state.ui, { autoHealthCheck: Boolean(enabled) });
+    emit("ui");
+    save();
+    return state.ui.autoHealthCheck;
+  }
+
   /* ------------------------------------------------------------------------
      Импорт / экспорт / сброс
      ------------------------------------------------------------------------ */
@@ -1393,6 +1404,7 @@
     setCompatMode: setCompatMode,
     setBufferEnabled: setBufferEnabled,
     setBufferMinutes: setBufferMinutes,
+    setAutoHealthCheck: setAutoHealthCheck,
 
     exportData: exportData,
     importData: importData,

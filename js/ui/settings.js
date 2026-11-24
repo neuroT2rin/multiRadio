@@ -16,6 +16,7 @@
   let compatCheckbox = null;
   let bufferCheckbox = null;
   let bufferMinutesSelect = null;
+  let autoHealthCheckbox = null;
   let fileInput = null;
   let versionLabel = null;
   let storageLabel = null;
@@ -150,6 +151,7 @@
       bufferMinutesSelect.value = String(store.state.ui.bufferMinutes);
       bufferMinutesSelect.disabled = !bufferEnabled;
     }
+    if (autoHealthCheckbox) autoHealthCheckbox.checked = store.state.ui.autoHealthCheck !== false;
 
     renderStorage();
   }
@@ -308,6 +310,7 @@
     compatCheckbox = dom.$("#setting-compat");
     bufferCheckbox = dom.$("#setting-buffer");
     bufferMinutesSelect = dom.$("#setting-buffer-minutes");
+    autoHealthCheckbox = dom.$("#setting-auto-health");
     fileInput = dom.$("#import-file");
     versionLabel = dom.$("#settings-version");
     storageLabel = dom.$("#settings-storage");
@@ -398,6 +401,15 @@
       });
     }
 
+    if (autoHealthCheckbox) {
+      autoHealthCheckbox.addEventListener("change", function () {
+        const enabled = store.setAutoHealthCheck(autoHealthCheckbox.checked);
+        if (!enabled) {
+          MR.toast.info("Автопроверка станций выключена: ручная проверка остаётся доступной.");
+        }
+      });
+    }
+
     if (fileInput) {
       fileInput.addEventListener("change", function (event) {
         const file = event.target.files && event.target.files[0];
@@ -415,6 +427,7 @@
         bufferMinutesSelect.value = String(store.state.ui.bufferMinutes);
         bufferMinutesSelect.disabled = store.state.ui.bufferEnabled === false;
       }
+      if (autoHealthCheckbox) autoHealthCheckbox.checked = store.state.ui.autoHealthCheck !== false;
     });
 
     syncControls();
