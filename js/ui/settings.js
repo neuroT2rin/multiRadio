@@ -23,7 +23,6 @@
   let importWarning = null;
   let importResolve = null;
   let dropZone = null;
-  let dropOverlay = null;
   let dragDepth = 0;
 
   const JSON_WARNING = "Нужен JSON-файл с настройками.";
@@ -61,20 +60,9 @@
     if (dropZone) dropZone.classList.remove("is-dragover");
   }
 
-  function showDropOverlay() {
-    if (!dropOverlay) return;
-    dropOverlay.hidden = false;
-    dropOverlay.setAttribute("aria-hidden", "false");
-    document.body.classList.add("is-file-dragging");
-  }
-
-  function hideDropOverlay() {
+  /** Сброс переноса: счётчик глубины и подсветка зоны импорта. */
+  function resetDrag() {
     dragDepth = 0;
-    if (dropOverlay) {
-      dropOverlay.hidden = true;
-      dropOverlay.setAttribute("aria-hidden", "true");
-    }
-    document.body.classList.remove("is-file-dragging");
     clearDropHint();
   }
 
@@ -84,7 +72,6 @@
 
     if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
     dragDepth += 1;
-    if (dragDepth === 1) showDropOverlay();
   }
 
   function onDragOver(event) {
@@ -92,30 +79,27 @@
     event.preventDefault();
 
     if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-    // Если dragenter потерялся при быстром движении — оверлей всё равно покажем.
-    if (dragDepth === 0) {
-      dragDepth = 1;
-      showDropOverlay();
-    }
+    // Если dragenter потерялся при быстром движении — считаем, что файл уже над окном.
+    if (dragDepth === 0) dragDepth = 1;
     updateDropHint(event.target);
   }
 
   function onDragLeave(event) {
     // relatedTarget === null — курсор ушёл за пределы окна.
     if (!event.relatedTarget) {
-      hideDropOverlay();
+      resetDrag();
       return;
     }
 
     if (dragDepth === 0) return;
     dragDepth = Math.max(0, dragDepth - 1);
-    if (dragDepth === 0) hideDropOverlay();
+    if (dragDepth === 0) clearDropHint();
   }
 
   function onDrop(event) {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    hideDropOverlay();
+    resetDrag();
 
     // Пока открыт выбор режима импорта, новые файлы игнорируем.
     if (importModal && MR.modal.isOpen(importModal)) return;
@@ -314,21 +298,13 @@
     importModal = dom.$("#modal-import");
     importWarning = dom.$("#import-warning");
     dropZone = dom.$("#import-drop");
-    dropOverlay = dom.$("#drop-overlay");
     if (!modal) return;
-
-    if (dropOverlay) {
-      dropOverlay.hidden = true;
-      dropOverlay.setAttribute("aria-hidden", "true");
-    }
 
     // Единый глобальный путь: JSON можно бросить в любое место окна.
     document.addEventListener("dragenter", onDragEnter);
     document.addEventListener("dragover", onDragOver);
     document.addEventListener("dragleave", onDragLeave);
     document.addEventListener("drop", onDrop);
-    window.addEventListener("dragend", hideDropOverlay);
-    window.addEventListener("blur", hideDropOverlay);
 
     if (importModal) {
       const cancel = dom.$("#import-cancel");

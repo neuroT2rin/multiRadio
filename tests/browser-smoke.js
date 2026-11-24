@@ -463,7 +463,7 @@ async function main() {
     return { open: open, closed: document.querySelector('#modal-import').hidden };
   })()`);
 
-  // Глобальный drag-and-drop: оверлей при удержании файла над окном
+  // Глобальный drag-and-drop: подсветка зоны импорта, без полноэкранного оверлея
   await evaluate(`(() => {
     const dt = new DataTransfer();
     dt.items.add(new File(["notes"], "notes.txt", { type: "text/plain" }));
@@ -472,31 +472,17 @@ async function main() {
     zone.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
   })()`);
   await sleep(100);
-  results.dropOverlay = await evaluate(`(() => {
-    const overlay = document.querySelector('#drop-overlay');
-    const style = getComputedStyle(overlay);
-    return {
-      visible: !overlay.hidden,
-      display: style.display,
-      bodyClass: document.body.classList.contains('is-file-dragging'),
-      zIndex: style.zIndex,
-      icon: (overlay.querySelector('.drop-overlay__icon') || {}).textContent || '',
-      title: (overlay.querySelector('.drop-overlay__title') || {}).textContent || '',
-      hint: (overlay.querySelector('.drop-overlay__hint') || {}).textContent || '',
-      dropHint: document.querySelector('#import-drop').classList.contains('is-dragover'),
-    };
-  })()`);
-  await screenshot("drop-overlay.png");
+  results.dropHint = await evaluate(`(() => ({
+    noOverlay: !document.querySelector('#drop-overlay'),
+    dropHint: document.querySelector('#import-drop').classList.contains('is-dragover'),
+  }))()`);
+  await screenshot("import-drop-hint.png");
 
-  results.dropOverlayLeave = await evaluate(`(() => {
+  results.dropHintLeave = await evaluate(`(() => {
     document.body.dispatchEvent(new DragEvent('dragleave', { bubbles: true, cancelable: true }));
-    const overlay = document.querySelector('#drop-overlay');
     return {
-      hidden: overlay.hidden,
-      display: getComputedStyle(overlay).display,
-      bodyClass: document.body.classList.contains('is-file-dragging'),
+      noOverlay: !document.querySelector('#drop-overlay'),
       dropHint: document.querySelector('#import-drop').classList.contains('is-dragover'),
-      ariaHidden: overlay.getAttribute('aria-hidden'),
     };
   })()`);
 
@@ -508,12 +494,14 @@ async function main() {
     const before = MR.store.state.stations.length;
     const dt = new DataTransfer();
     dt.items.add(new File(["notes"], "notes.txt", { type: "text/plain" }));
-    document.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt });
+    document.body.dispatchEvent(event);
     const toast = document.querySelector('#toast-region .toast:last-child');
     return {
       before: before,
       after: MR.store.state.stations.length,
-      overlayHidden: document.querySelector('#drop-overlay').hidden,
+      prevented: event.defaultPrevented,
+      noOverlay: !document.querySelector('#drop-overlay'),
       importHidden: document.querySelector('#modal-import').hidden,
       toastWarnsJson: Boolean(toast && toast.textContent.includes('JSON')),
     };
@@ -532,7 +520,7 @@ async function main() {
     return {
       open: open,
       closed: document.querySelector('#modal-import').hidden,
-      overlayHidden: document.querySelector('#drop-overlay').hidden,
+      noOverlay: !document.querySelector('#drop-overlay'),
       settingsClosed: document.querySelector('#modal-settings').hidden,
     };
   })()`);
