@@ -90,7 +90,22 @@ function makeWavDataUrl(seconds, sampleRate) {
 }
 
 async function main() {
-  const ws = new WebSocket(wsEndpoint);
+  // /json/version отдаёт браузерный endpoint, которому недоступен Runtime.*.
+  // Если пришёл он — берём WebSocket страницы из /json/list.
+  let endpoint = wsEndpoint;
+  if (/\/devtools\/browser\//.test(endpoint)) {
+    try {
+      const httpBase = endpoint.replace(/^ws/, "http").replace(/\/devtools\/browser\/.*$/, "");
+      const response = await fetch(httpBase + "/json/list");
+      const targets = await response.json();
+      const page = targets.find((target) => target.type === "page");
+      if (page && page.webSocketDebuggerUrl) endpoint = page.webSocketDebuggerUrl;
+    } catch (error) {
+      console.error("Не удалось получить страницу из /json/list:", error.message);
+    }
+  }
+
+  const ws = new WebSocket(endpoint);
   await new Promise((resolve, reject) => {
     ws.addEventListener("open", resolve, { once: true });
     ws.addEventListener("error", reject, { once: true });
@@ -634,6 +649,116 @@ async function main() {
       rewind: ok, buffered: buffered, liveVisible: liveVisible,
       statusAfter: statusAfter, maxBefore: maxBefore, valueBefore: valueBefore,
       maxAfter: maxAfter, valueAfter: valueAfter,
+    };
+  })()`);
+
+  // Пауза сохраняет буфер: данные, позиция и активный ползунок остаются.
+  await sleep(1200);
+  await evaluate(`MR.audio.pause()`);
+  await sleep(300);
+  results.timemachinePause = await evaluate(`(() => {
+    const slider = document.querySelector('#timemachine');
+    return {
+      status: MR.store.state.playback.status,
+      available: Math.round(MR.timemachine.availableSeconds() * 10) / 10,
+      capturing: MR.timemachine.isCapturing(),
+      sliderDisabled: slider.disabled,
+      sliderHidden: slider.hidden,
+    };
+  })()`);
+
+  // Перемотка на паузе только готовит буфер, но не запускает звук.
+  results.timemachineSeekPaused = await evaluate(`(() => {
+    const available = MR.timemachine.availableSeconds();
+    const ok = available >= 2 ? MR.timemachine.seek(2) : false;
+    const slider = document.querySelector('#timemachine');
+    return {
+      ok: ok,
+      available: Math.round(available * 10) / 10,
+      buffered: MR.timemachine.isBuffered(),
+      playing: MR.timemachine.isBufferPlaying(),
+      status: MR.store.state.playback.status,
+      rewind: Number(MR.timemachine.getRewind().toFixed(1)),
+      liveVisible: !document.querySelector('#timemachine-live').hidden,
+      sliderDisabled: slider.disabled,
+      sliderHidden: slider.hidden,
+      title: slider.title,
+    };
+  })()`);
+
+  // Play после паузы продолжает буфер с выбранного места.
+  await evaluate(`MR.audio.toggle()`);
+  await sleep(600);
+  results.timemachineResume = await evaluate(`(() => ({
+    playing: MR.timemachine.isBufferPlaying(),
+    buffered: MR.timemachine.isBuffered(),
+    status: MR.store.state.playback.status,
+    liveVisible: !document.querySelector('#timemachine-live').hidden,
+  }))()`);
+
+  results.timemachineStop = await evaluate(`(() => {
+    MR.timemachine.returnLive();
+    const bufferedAfterReturn = MR.timemachine.isBuffered();
+    const availableAfterReturn = Math.round(MR.timemachine.availableSeconds() * 10) / 10;
+    MR.audio.stop();
+    return {
+      bufferedAfterReturn: bufferedAfterReturn,
+      availableAfterReturn: availableAfterReturn,
+      statusAfterStop: MR.store.state.playback.status,
+      availableAfterStop: MR.timemachine.availableSeconds(),
+      sliderHidden: document.querySelector('#timemachine').hidden,
+    };
+  })()`);
+
+  // Настройки буфера: выключение освобождает память, длительность влияет на окно.
+  await evaluate(`document.querySelector('[data-command="settings:open"]').click()`);
+  await sleep(250);
+  results.timemachineSettings = await evaluate(`(async () => {
+    const checkbox = document.querySelector('#setting-buffer');
+    const select = document.querySelector('#setting-buffer-minutes');
+    const defaults = {
+      enabled: MR.store.state.ui.bufferEnabled,
+      minutes: MR.store.state.ui.bufferMinutes,
+      maxSeconds: MR.timemachine.maxSeconds(),
+      options: [...select.options].map((option) => option.value).join(','),
+    };
+
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const disabled = {
+      enabled: MR.store.state.ui.bufferEnabled,
+      available: MR.timemachine.availableSeconds(),
+      sliderHidden: document.querySelector('#timemachine').hidden,
+      selectDisabled: select.disabled,
+    };
+
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+    select.value = '5';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const enabled = {
+      enabled: MR.store.state.ui.bufferEnabled,
+      minutes: MR.store.state.ui.bufferMinutes,
+      maxSeconds: MR.timemachine.maxSeconds(),
+      sliderHidden: document.querySelector('#timemachine').hidden,
+      selectDisabled: select.disabled,
+    };
+
+    select.value = '3';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#modal-settings [data-close-modal]').click();
+
+    return {
+      defaults: defaults,
+      disabled: disabled,
+      enabled: enabled,
+      restored: {
+        enabled: MR.store.state.ui.bufferEnabled,
+        minutes: MR.store.state.ui.bufferMinutes,
+        modalClosed: document.querySelector('#modal-settings').hidden,
+      },
     };
   })()`);
 

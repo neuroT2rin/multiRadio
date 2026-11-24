@@ -8,7 +8,7 @@
   const MR = (global.MR = global.MR || {});
 
   MR.config = {
-    version: "2.3.0",
+    version: "2.4.0",
     storageKey: "multiradio:state:v2",
     statsKey: "multiradio:stats:v1",
 
@@ -18,6 +18,12 @@
     visualizerModes: ["spectrum", "aurora", "orbit", "tunnel", "spiral"],
     /** Режимы компактной визуализации потока в плеере. */
     miniVisualizerModes: ["wave", "ribbon", "sparkle"],
+
+    /** «Машина времени»: сколько минут эфира держать в памяти. */
+    timemachine: {
+      defaultMinutes: 3,
+      options: [1, 2, 3, 5, 10],
+    },
 
     health: {
       /** Период автоматической проверки станций. */

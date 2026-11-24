@@ -20,9 +20,22 @@
   function render() {
     if (!slider) return;
 
+    // Буфер выключен в настройках или недоступен в compat-режиме:
+    // ползунок и кнопка LIVE не нужны.
+    if (!MR.timemachine.isEnabled() || store.state.ui.compatMode) {
+      slider.hidden = true;
+      slider.disabled = true;
+      if (liveButton) liveButton.hidden = true;
+      return;
+    }
+
+    slider.hidden = false;
+
     const available = MR.timemachine.availableSeconds();
     const buffered = MR.timemachine.isBuffered();
+    const paused = store.state.playback.status === "paused";
     const max = Math.max(1, Math.floor(available));
+    const ready = available >= 2;
 
     // max = весь буфер; value = max − Δ. Пока Δ постоянна, а буфер растёт,
     // ползунок пропорционально сдвигается вправо, к живому эфиру.
@@ -32,13 +45,20 @@
       slider.value = String(value);
     }
 
-    slider.disabled = !buffered && available < 5;
+    slider.disabled = !buffered && !ready;
 
     if (buffered) {
-      slider.title = "Вы слушаете буфер. Нажмите LIVE, чтобы вернуться к эфиру.";
+      slider.title = paused
+        ? "Пауза. Потяните ползунок или нажмите ▶, чтобы слушать буфер."
+        : "Вы слушаете буфер. Нажмите LIVE, чтобы вернуться к эфиру.";
       if (liveButton) liveButton.hidden = false;
+    } else if (paused) {
+      slider.title = ready
+        ? "Пауза. Буфер сохранён: потяните влево, чтобы выбрать место."
+        : "Пауза. Буфер эфира наполняется…";
+      if (liveButton) liveButton.hidden = true;
     } else {
-      slider.title = available >= 5
+      slider.title = ready
         ? "Буфер эфира: " + Math.round(available) + " с. Потяните влево, чтобы отмотать."
         : "Буфер эфира наполняется…";
       if (liveButton) liveButton.hidden = true;
@@ -52,8 +72,11 @@
 
     if (secondsBack < 2) {
       MR.timemachine.returnLive();
-    } else {
+    } else if (store.state.playback.isPlaying) {
       MR.timemachine.playFrom(secondsBack);
+    } else {
+      // На паузе только готовим буфер; Play продолжит с выбранного места.
+      MR.timemachine.seek(secondsBack);
     }
   }
 
@@ -62,17 +85,13 @@
     liveButton = dom.$("#timemachine-live");
     if (!slider) return;
 
+    // input нужен только чтобы не перебивать позицию во время перетаскивания.
+    // Применяем перемотку ровно один раз — по change.
     slider.addEventListener("input", function () {
       dragging = true;
     });
 
     slider.addEventListener("change", function () {
-      dragging = false;
-      applyPosition();
-    });
-
-    slider.addEventListener("pointerup", function () {
-      if (!dragging) return;
       dragging = false;
       applyPosition();
     });

@@ -581,6 +581,29 @@
               <span class="switch__track"><span class="switch__knob"></span></span>
             </span>
           </label>
+          <label class="settings-row" for="setting-buffer">
+            <span class="settings-row__text">
+              <span class="settings-row__title">Буфер эфира</span>
+              <span class="settings-row__hint">Последние минуты эфира в памяти, чтобы отматывать назад. До 10 минут ≈ 38 МБ.</span>
+            </span>
+            <span class="switch switch--inline" aria-hidden="true">
+              <input type="checkbox" id="setting-buffer" />
+              <span class="switch__track"><span class="switch__knob"></span></span>
+            </span>
+          </label>
+          <label class="settings-row" for="setting-buffer-minutes">
+            <span class="settings-row__text">
+              <span class="settings-row__title">Длительность буфера</span>
+              <span class="settings-row__hint">Сколько минут эфира хранить: чем длиннее буфер, тем больше памяти (до 10 минут ≈ 38 МБ).</span>
+            </span>
+            <select class="input input--compact" id="setting-buffer-minutes">
+              <option value="1">1 минута</option>
+              <option value="2">2 минуты</option>
+              <option value="3">3 минуты</option>
+              <option value="5">5 минут</option>
+              <option value="10">10 минут</option>
+            </select>
+          </label>
         </section>
 
         <section class="settings-section" aria-labelledby="settings-data">
@@ -597,7 +620,7 @@
             <button class="btn btn-danger btn-ghost" type="button" data-command="settings:reset">Сбросить всё</button>
           </div>
           <input type="file" id="import-file" accept="application/json,.json" hidden />
-          <p class="settings-hint">Экспортируются станции, группы, избранное, громкость, эквалайзер и настройки вида. Файл хранится локально и никуда не отправляется.</p>
+          <p class="settings-hint">Экспортируются станции, группы, избранное, громкость, эквалайзер, настройки вида и буфера эфира. Файл хранится локально и никуда не отправляется.</p>
         </section>
 
         <section class="settings-section" aria-labelledby="settings-about">

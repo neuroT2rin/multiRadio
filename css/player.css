@@ -248,6 +248,11 @@ input[type="range"].range:focus-visible {
   opacity: 1;
 }
 
+.timemachine[hidden],
+.timemachine-live[hidden] {
+  display: none;
+}
+
 .timemachine:disabled {
   cursor: default;
   opacity: 0.15;

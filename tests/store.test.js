@@ -273,6 +273,38 @@ test("служебные функции не падают без данных", 
   assert.strictEqual(store.getGroupOfStation("nope"), null);
 });
 
+console.log("\nБуфер эфира");
+test("по умолчанию буфер включён на 3 минуты", () => {
+  reset();
+  assert.strictEqual(store.state.ui.bufferEnabled, true);
+  assert.strictEqual(store.state.ui.bufferMinutes, 3);
+  assert.deepStrictEqual(MR.config.timemachine.options, [1, 2, 3, 5, 10]);
+});
+
+test("hydrate валидирует bufferEnabled и bufferMinutes", () => {
+  store.hydrate({ version: 2, ui: { bufferEnabled: false, bufferMinutes: 7 } });
+  assert.strictEqual(store.state.ui.bufferEnabled, false);
+  assert.strictEqual(store.state.ui.bufferMinutes, 3);
+
+  store.hydrate({ version: 2, ui: { bufferEnabled: true, bufferMinutes: 5 } });
+  assert.strictEqual(store.state.ui.bufferEnabled, true);
+  assert.strictEqual(store.state.ui.bufferMinutes, 5);
+});
+
+test("действия буфера возвращают фактическое значение и сохраняются", () => {
+  reset();
+  assert.strictEqual(store.setBufferMinutes(5), 5);
+  assert.strictEqual(store.setBufferEnabled(false), false);
+  assert.strictEqual(store.setBufferMinutes(7), 3);
+
+  const saved = store.serialize();
+  assert.strictEqual(saved.ui.bufferEnabled, false);
+  assert.strictEqual(saved.ui.bufferMinutes, 3);
+
+  store.setBufferEnabled(true);
+  assert.strictEqual(store.state.ui.bufferEnabled, true);
+});
+
 console.log("\n" + passed + " passed, " + failures.length + " failed\n");
 
 if (failures.length > 0) {

@@ -2,9 +2,12 @@
  * services/timemachine.js — «машина времени» эфира.
  *
  * В памяти держится последние несколько минут звука в моно-PCM (16 кГц):
- * это ~11 МБ на 3 минуты и позволяет точно отмотать назад. Перемотка строит
+ * это ~38 МБ на 10 минут и позволяет точно отмотать назад. Перемотка строит
  * WAV из выбранного места и проигрывает его отдельным <audio>, живой поток
- * ставится на паузу; кнопка LIVE возвращает к эфиру.
+ * не ставится на паузу, а глушится, чтобы буфер продолжал писаться.
+ *
+ * Пауза не стирает данные: звучащий буфер ставится на паузу и продолжает с
+ * выбранного места. Остановка и смена станции сбрасывают буфер.
  */
 (function (global) {
   "use strict";
@@ -12,9 +15,9 @@
   const MR = (global.MR = global.MR || {});
   const store = MR.store;
   const utils = MR.utils;
+  const config = MR.config;
 
   const TARGET_RATE = 16000;
-  const MAX_SECONDS = 180;
 
   let tap = null;
   let capturing = false;
@@ -35,22 +38,43 @@
     store.emit("timemachine");
   }
 
+  /** Запись буфера включена в настройках (по умолчанию — да). */
+  function isEnabled() {
+    return store.state.ui.bufferEnabled !== false;
+  }
+
+  /** Текущий размер окна буфера в секундах (из настроек). */
+  function maxSeconds() {
+    const minutes = Number(store.state.ui.bufferMinutes);
+    const safe = config.timemachine.options.indexOf(minutes) !== -1
+      ? minutes
+      : config.timemachine.defaultMinutes;
+    return safe * 60;
+  }
+
   function availableSeconds() {
-    if (!chunks.length) return 0;
+    if (!isEnabled() || !chunks.length) return 0;
     return (totalSamples - chunks[0].start) / TARGET_RATE;
+  }
+
+  /** Обрезает буфер по текущему максимуму (настройка могла уменьшиться). */
+  function trimChunks() {
+    const limit = maxSeconds() * TARGET_RATE;
+    while (chunks.length > 1 && totalSamples - chunks[0].start > limit) {
+      chunks.shift();
+    }
   }
 
   function appendSamples(mono) {
     chunks.push({ start: totalSamples, data: mono });
     totalSamples += mono.length;
-
-    const minSamples = MAX_SECONDS * TARGET_RATE;
-    while (chunks.length > 1 && totalSamples - chunks[0].start > minSamples) {
-      chunks.shift();
-    }
+    trimChunks();
   }
 
   function handleSamples(left, right, rate) {
+    if (!isEnabled()) return;
+    // На паузе поток ещё может отдавать буферы, но это тишина — не пишем её.
+    if (!store.state.playback.isPlaying) return;
     if (!left || !left.length) return;
     sourceRate = rate || sourceRate;
 
@@ -73,6 +97,9 @@
   }
 
   function ensureTap() {
+    if (!isEnabled()) return;
+    // В режиме совместимости Web Audio выключен — PCM-ответвление невозможно.
+    if (store.state.ui.compatMode) return;
     if (capturing) return;
     if (!store.state.playback.isPlaying) return;
 
@@ -83,6 +110,12 @@
     }
     capturing = true;
     emit();
+  }
+
+  function stopCapture() {
+    if (tap) tap.disconnect();
+    tap = null;
+    capturing = false;
   }
 
   function collectFrom(absStart) {
@@ -136,6 +169,25 @@
     return new Blob([view], { type: "audio/wav" });
   }
 
+  /**
+   * Буфер не проходит через GainNode живого эфира, поэтому громкость и mute
+   * выставляются прямо элементу.
+   */
+  function applyBufferVolume() {
+    if (!bufferEl) return;
+    const volume = Number(store.state.volume);
+    const safe = Number.isFinite(volume) ? utils.clamp(volume, 0, 1) : 1;
+    bufferEl.volume = store.state.muted ? 0 : safe;
+  }
+
+  function ensureBufferElement() {
+    if (bufferEl) return;
+    bufferEl = new Audio();
+    bufferEl.addEventListener("ended", function () {
+      if (buffered) returnLive();
+    });
+  }
+
   function stopBuffer() {
     if (bufferEl) {
       try { bufferEl.pause(); } catch (error) { /* noop */ }
@@ -158,11 +210,19 @@
     return true;
   }
 
-  function playFrom(secondsBack) {
+  /**
+   * Готовит WAV с выбранной позиции и назначает его буферному элементу,
+   * но не запускает воспроизведение. Живой эфир при этом глушится.
+   */
+  function prepare(secondsBack) {
+    if (!isEnabled()) return false;
+
     const available = availableSeconds();
     if (available < 2) return false;
 
-    const clamped = utils.clamp(secondsBack, 1, available - 0.3);
+    const raw = Number(secondsBack);
+    const requested = Number.isFinite(raw) ? raw : 1;
+    const clamped = utils.clamp(requested, 1, Math.max(1, available - 0.3));
     const startSample = Math.max(
       chunks[0].start,
       totalSamples - Math.floor(clamped * TARGET_RATE)
@@ -175,13 +235,7 @@
     if (bufferUrl) URL.revokeObjectURL(bufferUrl);
     bufferUrl = URL.createObjectURL(blob);
 
-    if (!bufferEl) {
-      bufferEl = new Audio();
-      bufferEl.addEventListener("ended", function () {
-        if (buffered) returnLive();
-      });
-    }
-
+    ensureBufferElement();
     bufferEl.src = bufferUrl;
     bufferPosition = clamped;
     buffered = true;
@@ -189,12 +243,25 @@
     // Живой эфир не ставим на паузу — только глушим, чтобы буфер продолжал
     // писаться, а в плеере не появлялось состояние «Пауза».
     MR.audio.setBufferSilent(true);
+    applyBufferVolume();
+
+    emit();
+    return true;
+  }
+
+  /** Запускает уже подготовленный (или приостановленный) буфер. */
+  function startBuffer() {
+    if (!isEnabled() || !buffered || !bufferEl) return false;
+    if (!bufferEl.paused) return true;
+
+    applyBufferVolume();
 
     const promise = bufferEl.play();
     if (promise && typeof promise.catch === "function") {
       promise.catch(function () {
-        stopBuffer();
-        emit();
+        // Автозапуск запрещён или источник недоступен: возвращаемся к эфиру,
+        // данные буфера при этом остаются в памяти.
+        if (buffered) returnLive();
       });
     }
 
@@ -202,50 +269,135 @@
     return true;
   }
 
-  function reset(clearStation) {
-    if (tap) tap.disconnect();
-    tap = null;
-    capturing = false;
+  function playFrom(secondsBack) {
+    if (!prepare(secondsBack)) return false;
+    return startBuffer();
+  }
+
+  /**
+   * Перемотка без смены состояния плеера: на паузе только готовит буфер
+   * (продолжение — по Play), во время живого эфира сразу играет.
+   */
+  function seek(secondsBack) {
+    if (!isEnabled()) return false;
+    if (store.state.playback.isPlaying) return playFrom(secondsBack);
+    return prepare(secondsBack);
+  }
+
+  /** Продолжает приостановленный буфер с выбранного места. */
+  function resumeBuffer() {
+    if (!isEnabled() || !buffered) return false;
+    return startBuffer();
+  }
+
+  function pauseBuffer() {
+    if (!bufferEl || !buffered) return false;
+    try { bufferEl.pause(); } catch (error) { /* noop */ }
+    emit();
+    return true;
+  }
+
+  function isBufferPlaying() {
+    return Boolean(buffered && bufferEl && !bufferEl.paused && !bufferEl.ended);
+  }
+
+  function reset() {
+    stopCapture();
     chunks = [];
     totalSamples = 0;
     resamplePhase = 0;
     stopBuffer();
-    if (clearStation) activeStationId = null;
+    activeStationId = null;
     emit();
   }
 
-  function onPlayback() {
-    const playback = store.state.playback;
+  function onPlayback(payload) {
+    const playback = payload || store.state.playback;
 
-    // Пока играет буфер, обычные события воспроизведения игнорируем: живой
-    // эфир продолжает идти беззвучно. Выходим из буфера только при смене
-    // станции или ручной остановке.
-    if (buffered) {
-      if (!playback.isPlaying || playback.stationId !== activeStationId) {
-        stopBuffer();
-      } else {
-        return;
-      }
-    }
-
-    if (!playback.isPlaying) {
-      reset(false);
+    if (!isEnabled()) {
+      if (capturing || buffered || chunks.length || activeStationId) reset();
       return;
     }
 
-    if (playback.stationId !== activeStationId) {
-      reset(false);
-      activeStationId = playback.stationId;
+    // Остановка (stop) — единственный статус, который сбрасывает буфер.
+    if (playback.status === "idle") {
+      if (capturing || buffered || chunks.length || activeStationId) reset();
+      return;
     }
 
+    if (activeStationId !== playback.stationId) {
+      reset();
+      activeStationId = playback.stationId || null;
+    }
+
+    if (playback.status === "paused") {
+      // Пауза не стирает данные: останавливаем звучащий буфер и перестаём
+      // писать тишину, но позиция и содержимое остаются доступными.
+      pauseBuffer();
+      stopCapture();
+      emit();
+      return;
+    }
+
+    if (buffered) {
+      // Временные статусы живого потока (connecting/buffering/error) не должны
+      // выбивать из буфера: эфир заглушён, запись продолжается.
+      MR.audio.setBufferSilent(true);
+      if (playback.isPlaying) {
+        ensureTap();
+        if (bufferEl && bufferEl.paused) resumeBuffer();
+      }
+      return;
+    }
+
+    if (!playback.isPlaying) return;
     ensureTap();
+  }
+
+  function onUiChange() {
+    if (!isEnabled()) {
+      reset();
+      MR.audio.setBufferSilent(false);
+      emit();
+      return;
+    }
+
+    // Переключились в compat-режим: старый tap уже мёртв (контекст закрыт),
+    // поэтому освобождаем PCM, а не показываем замерший буфер.
+    if (store.state.ui.compatMode) {
+      if (capturing || buffered || chunks.length) {
+        reset();
+        MR.audio.setBufferSilent(false);
+        emit();
+      }
+      return;
+    }
+
+    trimChunks();
+
+    const available = availableSeconds();
+    if (buffered && bufferPosition > Math.max(1, available - 0.3)) {
+      // Буфер сократили — выбранная позиция стала недоступна.
+      returnLive();
+      return;
+    }
+
+    // Буфер только что включили во время игры — начинаем писать сразу.
+    if (!capturing && !tap && store.state.playback.isPlaying) {
+      activeStationId = store.state.playback.stationId || null;
+      ensureTap();
+    }
+
+    emit();
   }
 
   function init() {
     store.on("playback", onPlayback);
+    store.on("volume", applyBufferVolume);
+    store.on("ui", onUiChange);
 
     emitTimer = setInterval(function () {
-      if (capturing) emit();
+      if (capturing && isEnabled()) emit();
     }, 1000);
 
     onPlayback();
@@ -254,9 +406,9 @@
   function dispose() {
     if (emitTimer) clearInterval(emitTimer);
     emitTimer = null;
-    reset(true);
+    reset();
     if (bufferEl) {
-      bufferEl.pause();
+      try { bufferEl.pause(); } catch (error) { /* noop */ }
       bufferEl = null;
     }
   }
@@ -265,11 +417,17 @@
     init: init,
     dispose: dispose,
     availableSeconds: availableSeconds,
+    prepare: prepare,
     playFrom: playFrom,
+    seek: seek,
+    resume: resumeBuffer,
+    resumeBuffer: resumeBuffer,
     returnLive: returnLive,
     getRewind: function () { return buffered ? bufferPosition : 0; },
     isBuffered: function () { return buffered; },
     isCapturing: function () { return capturing; },
-    maxSeconds: MAX_SECONDS,
+    isEnabled: isEnabled,
+    isBufferPlaying: isBufferPlaying,
+    maxSeconds: maxSeconds,
   };
 })(window);
