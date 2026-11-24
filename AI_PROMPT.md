@@ -154,7 +154,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой), прокрутка >5 и поиск >10 | `init`, `render`, `openEditor(groupId)` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
-| `js/ui/settings.js` | Настройки вида, compat, export/import (drag-and-drop, замена или слияние), reset | `init`, `open` |
+| `js/ui/settings.js` | Настройки вида, compat, export/import (глобальный drag-and-drop только для JSON, замена или слияние), reset | `init`, `open` |
 | `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
 | `js/ui/sleep-timer.js` | Таймер сна в шапке: отсчёт и остановка радио | `init`, `start(minutes)`, `cancel`, `dispose`, `remainingMs` |
 | `js/ui/voice-search.js` | Голосовой подбор станции (Web Speech API + локальный матчер) | `init`, `start`, `stop`, `match(text)`, `supported`, `dispose` |
@@ -377,7 +377,7 @@ document.querySelector("#stations-list").appendChild(row);
           settings-version, settings-storage
 Прочее:   modal-confirm, confirm-title, confirm-message, confirm-ok, confirm-cancel,
           modal-import, import-title, import-warning, import-merge, import-replace,
-          import-cancel, import-drop, info-connection, info-connection-state,
+          import-cancel, import-drop, drop-overlay, info-connection, info-connection-state,
           info-source, info-bitrate,
           info-playback, info-health, recheck-btn, recheck-label,
           stats-total, stats-stations, stats-genres, stats-empty,
@@ -411,6 +411,7 @@ document.querySelector("#stations-list").appendChild(row);
 | Модалки | `.modal`, `.modal__backdrop/__panel/__header/__body/__footer` |
 | Формы | `.form`, `.form-grid`, `.field`, `.field--span2`, `.field__error`, `.input`, `.checklist`, `.check-item` |
 | Тосты | `.toast-region`, `.toast--success|error|warning|info` |
+| Drag&drop импорта | `.drop-overlay`, `.drop-overlay__panel/__icon/__title/__hint`, `body.is-file-dragging`, `.import-drop`, `.is-dragover` |
 | Визуализация | `.bg-visualizer.is-hidden`, `.mini-visualizer`, `body.is-viz-mode`, `.nav-group--view`, `.viz-btn[aria-pressed]` |
 
 **CSS-файлы:** базовые токены (`--bg-0`, `--surface`, `--accent`, `--danger`,
@@ -554,7 +555,7 @@ VPN точно определить нельзя — не обещать это�
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
-| Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings`/`modal-import` | экспорт→импорт, v1-файл, замена, слияние, drop файла |
+| Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings`/`modal-import`/`#drop-overlay`/`components.css` | экспорт→импорт, v1-файл, замена, слияние, drop файла в любое место окна |
 | Тема, цвета, отступы | `css/base.css` + конкретный css | css | визуальный просмотр |
 | Адаптив | `css/layout.css`, `css/player.css`, `css/components.css` | css | 390/768/1440 |
 | Тесты логики | `tests/store.test.js` | тест + код | 20/20 |
@@ -647,6 +648,9 @@ VPN точно определить нельзя — не обещать это�
   `backdrop-filter`, `fixed` может обрезаться). Не меняй без проверки.
 - `type="button"` обязателен для команд внутри форм.
 - Не используй `alert/confirm/prompt`.
+- Глобальный drag&drop (`ui/settings.js`) принимает только JSON (`.json` или
+  `type="application/json"`): не-JSON даёт предупреждение и не открывает импорт.
+  Обработчик один — не добавляй локальные `drop` на модалки, иначе двойное срабатывание.
 - Строки интерфейса — по-русски; не переводить тосты/ошибки на английский.
 - `localStorage` может быть недоступен — приложение работает в памяти.
 - Не обещай определение VPN: это эвристика.
