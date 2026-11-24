@@ -475,13 +475,24 @@ async function main() {
     slider: Boolean(document.querySelector('#timemachine')),
   }))()`);
 
-  results.timemachineRewind = await evaluate(`(() => {
+  results.timemachineRewind = await evaluate(`(async () => {
     const available = MR.timemachine.availableSeconds();
     const ok = available > 2 ? MR.timemachine.playFrom(1.5) : false;
+    const slider = document.querySelector('#timemachine');
+    const statusAfter = MR.store.state.playback.status;
     const buffered = MR.timemachine.isBuffered();
     const liveVisible = !document.querySelector('#timemachine-live').hidden;
+    const maxBefore = Number(slider.max);
+    const valueBefore = Number(slider.value);
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    const maxAfter = Number(slider.max);
+    const valueAfter = Number(slider.value);
     MR.timemachine.returnLive();
-    return { rewind: ok, buffered: buffered, liveVisible: liveVisible };
+    return {
+      rewind: ok, buffered: buffered, liveVisible: liveVisible,
+      statusAfter: statusAfter, maxBefore: maxBefore, valueBefore: valueBefore,
+      maxAfter: maxAfter, valueAfter: valueAfter,
+    };
   })()`);
 
   results.recorder = await evaluate(`(() => ({

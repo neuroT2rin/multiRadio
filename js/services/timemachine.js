@@ -148,14 +148,12 @@
     }
     buffered = false;
     bufferPosition = 0;
+    // Возвращаем звук живого эфира (он всё это время продолжал играть беззвучно).
+    MR.audio.setBufferSilent(false);
   }
 
   function returnLive() {
-    const wasBuffered = buffered;
     stopBuffer();
-    if (wasBuffered && !store.state.playback.isPlaying) {
-      MR.audio.toggle();
-    }
     emit();
     return true;
   }
@@ -188,7 +186,9 @@
     bufferPosition = clamped;
     buffered = true;
 
-    if (store.state.playback.isPlaying) MR.audio.pause();
+    // Живой эфир не ставим на паузу — только глушим, чтобы буфер продолжал
+    // писаться, а в плеере не появлялось состояние «Пауза».
+    MR.audio.setBufferSilent(true);
 
     const promise = bufferEl.play();
     if (promise && typeof promise.catch === "function") {
@@ -217,10 +217,11 @@
   function onPlayback() {
     const playback = store.state.playback;
 
-    // Пауза, вызванная прослушиванием буфера, не должна сбрасывать буфер.
-    // Если же пользователь включил другую станцию — выходим из буфера.
+    // Пока играет буфер, обычные события воспроизведения игнорируем: живой
+    // эфир продолжает идти беззвучно. Выходим из буфера только при смене
+    // станции или ручной остановке.
     if (buffered) {
-      if (playback.isPlaying && playback.stationId !== activeStationId) {
+      if (!playback.isPlaying || playback.stationId !== activeStationId) {
         stopBuffer();
       } else {
         return;
@@ -244,7 +245,7 @@
     store.on("playback", onPlayback);
 
     emitTimer = setInterval(function () {
-      if (capturing && !buffered) emit();
+      if (capturing) emit();
     }, 1000);
 
     onPlayback();

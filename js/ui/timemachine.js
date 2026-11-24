@@ -1,8 +1,9 @@
 /**
  * ui/timemachine.js — тонкий ползунок перемотки внизу визуализатора потока.
  *
- * Справа — эфир, левее — буфер последних минут. Перетаскивание строит WAV
- * из выбранного места и ставит эфир на паузу; кнопка LIVE возвращает к эфиру.
+ * Справа — живой эфир, левее — буфер последних минут. Позиция ползунка
+ * считается от правого края: отмотка Δ остаётся постоянной, поэтому по мере
+ * роста буфера ползунок сам сдвигается вправо, к эфиру.
  */
 (function (global) {
   "use strict";
@@ -15,40 +16,33 @@
   let slider = null;
   let liveButton = null;
   let dragging = false;
-  let wasBuffered = false;
-  let frozenMax = 1;
 
   function render() {
     if (!slider) return;
 
     const available = MR.timemachine.availableSeconds();
     const buffered = MR.timemachine.isBuffered();
-    const liveMax = Math.max(1, Math.floor(available));
+    const max = Math.max(1, Math.floor(available));
 
-    if (!buffered) {
-      wasBuffered = false;
-      slider.max = String(liveMax);
-      if (!dragging) slider.value = String(liveMax);
-      slider.disabled = available < 5;
+    // max = весь буфер; value = max − Δ. Пока Δ постоянна, а буфер растёт,
+    // ползунок пропорционально сдвигается вправо, к живому эфиру.
+    slider.max = String(max);
+    if (!dragging) {
+      const value = buffered ? Math.max(0, max - MR.timemachine.getRewind()) : max;
+      slider.value = String(value);
+    }
+
+    slider.disabled = !buffered && available < 5;
+
+    if (buffered) {
+      slider.title = "Вы слушаете буфер. Нажмите LIVE, чтобы вернуться к эфиру.";
+      if (liveButton) liveButton.hidden = false;
+    } else {
       slider.title = available >= 5
         ? "Буфер эфира: " + Math.round(available) + " с. Потяните влево, чтобы отмотать."
         : "Буфер эфира наполняется…";
       if (liveButton) liveButton.hidden = true;
-      return;
     }
-
-    if (!wasBuffered) {
-      frozenMax = liveMax;
-      wasBuffered = true;
-    }
-
-    slider.max = String(frozenMax);
-    if (!dragging) {
-      slider.value = String(Math.max(0, frozenMax - MR.timemachine.getRewind()));
-    }
-    slider.disabled = false;
-    slider.title = "Вы слушаете буфер. Нажмите LIVE, чтобы вернуться к эфиру.";
-    if (liveButton) liveButton.hidden = false;
   }
 
   function applyPosition() {

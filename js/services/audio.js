@@ -29,6 +29,8 @@
   let graphReady = false;
   let graphFailed = false;
   let captureDestination = null;
+  /** Пока слушаем буфер «машины времени», живой эфир беззвучен, но продолжает играть. */
+  let bufferSilent = false;
   let intendedPlaying = false;
   let activeUrl = "";
   let currentToken = 0;
@@ -162,6 +164,7 @@
     gainNode = null;
     analyserNode = null;
     captureDestination = null;
+    bufferSilent = false;
     graphReady = false;
 
     if (ctx) {
@@ -184,6 +187,12 @@
     return graphReady && !compat;
   }
 
+  /** Временно глушит живой эфир под воспроизведение буфера. */
+  function setBufferSilent(silent) {
+    bufferSilent = Boolean(silent);
+    applyVolume();
+  }
+
   /**
    * Поток для записи эфира. В обычном режиме берём звук после анализатора,
    * чтобы запись совпадала с тем, что слышно (с эквалайзером). В режиме
@@ -196,14 +205,16 @@
    * disconnect() или null, если граф недоступен.
    */
   function createPCMTap(onSamples) {
-    if (!graphUsable() || !analyserNode || !ctx) return null;
+    if (!graphUsable() || !sourceNode || !ctx) return null;
     if (typeof ctx.createScriptProcessor !== "function") return null;
 
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     const sink = ctx.createGain();
     sink.gain.value = 0;
 
-    analyserNode.connect(processor);
+    // Ответвляемся до GainNode: «машина времени» должна продолжать писать
+    // живой эфир даже когда он беззвучен из-за прослушивания буфера.
+    sourceNode.connect(processor);
     processor.connect(sink);
     sink.connect(ctx.destination);
 
@@ -222,7 +233,7 @@
         stopped = true;
         try {
           processor.onaudioprocess = null;
-          analyserNode.disconnect(processor);
+          sourceNode.disconnect(processor);
         } catch (error) {
           /* узел уже отключён */
         }
@@ -261,7 +272,7 @@
      ------------------------------------------------------------------------ */
 
   function applyVolume() {
-    const effective = store.state.muted ? 0 : store.state.volume;
+    const effective = store.state.muted || bufferSilent ? 0 : store.state.volume;
 
     if (gainNode && ctx) {
       try {
@@ -718,5 +729,6 @@
     getSourceLabel: sourceLabel,
     getCaptureStream: getCaptureStream,
     createPCMTap: createPCMTap,
+    setBufferSilent: setBufferSilent,
   };
 })(window);
