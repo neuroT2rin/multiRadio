@@ -823,6 +823,137 @@ async function main() {
     capture: Boolean(MR.audio.getCaptureStream()),
   }))()`);
 
+  // Архив записей: фейковый WAV сохраняется в IndexedDB, вкладка «Записи»
+  // показывает карточку с перемоткой, скачиванием и удалением.
+  const recordWav = makeWavDataUrl(1, 8000);
+  results.recordingsSave = await evaluate(`(async () => {
+    const base64 = ${JSON.stringify(recordWav)}.split(",")[1];
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "audio/wav" });
+    const saved = await MR.recordings.save({
+      id: "smoke-record-1",
+      stationId: "smoke",
+      stationName: "Тест-запись",
+      createdAt: Date.now(),
+      durationMs: 1000,
+      mimeType: "audio/wav",
+      size: blob.size,
+      blob: blob,
+    });
+    return {
+      ok: saved.ok,
+      persistent: await MR.recordings.isPersistent(),
+      supported: await MR.recordings.supported(),
+      stored: (await MR.recordings.list()).length,
+      name: MR.recordings.fileName(saved.entry),
+    };
+  })()`);
+
+  await evaluate(`document.querySelector('#tab-recordings').click()`);
+  await sleep(500);
+  results.recordingsView = await evaluate(`(() => {
+    const cards = document.querySelectorAll('#recordings-list .record-card');
+    const seek = document.querySelector('.record-card__seek');
+    const download = document.querySelector('.record-card__download');
+    return {
+      view: MR.store.state.view,
+      panelVisible: !document.querySelector('#panel-recordings').hidden,
+      tabSelected: document.querySelector('#tab-recordings').getAttribute('aria-selected'),
+      count: document.querySelector('#recordings-count').textContent,
+      rows: cards.length,
+      station: cards.length ? cards[0].querySelector('.record-card__station').textContent : '',
+      seek: Boolean(seek),
+      seekMax: seek ? Number(seek.max) : null,
+      download: download ? download.getAttribute('download') : '',
+      fallbackHidden: document.querySelector('#recordings-fallback').hidden,
+      loadingHidden: document.querySelector('#recordings-loading').hidden,
+      emptyHidden: document.querySelector('#recordings-empty').hidden,
+      clearVisible: !document.querySelector('#recordings-clear').hidden,
+    };
+  })()`);
+
+  // Реальная запись: stop не должен сам начинать скачивание, только архив.
+  results.recordingsRecorder = await evaluate(`(async () => {
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const before = (await MR.recordings.list()).length;
+
+    if (!MR.store.state.playback.isPlaying) {
+      MR.audio.playStation(MR.store.state.stations[0].id);
+      for (let i = 0; i < 16 && !MR.store.state.playback.isPlaying; i += 1) await wait(300);
+    }
+
+    const originalClick = HTMLAnchorElement.prototype.click;
+    let downloadClicks = 0;
+    HTMLAnchorElement.prototype.click = function () { downloadClicks += 1; };
+
+    let started = false;
+    try {
+      document.querySelector('#record-btn').click();
+      started = MR.recorder.isRecording();
+      await wait(1200);
+      if (MR.recorder.isRecording()) document.querySelector('#record-btn').click();
+      await wait(1400);
+    } finally {
+      HTMLAnchorElement.prototype.click = originalClick;
+    }
+
+    const items = await MR.recordings.list();
+    const toasts = [...document.querySelectorAll('#toast-region .toast')]
+      .map((node) => node.textContent);
+    return {
+      playing: MR.store.state.playback.isPlaying,
+      started: started,
+      stopped: !MR.recorder.isRecording(),
+      downloadClicks: downloadClicks,
+      before: before,
+      after: items.length,
+      firstDuration: items[0] ? items[0].durationMs : 0,
+      firstSize: items[0] ? items[0].size : 0,
+      cards: document.querySelectorAll('#recordings-list .record-card').length,
+      savedToast: toasts.some((text) => text.indexOf('архив') !== -1),
+      recordChipHidden: document.querySelector('#record-chip').hidden,
+    };
+  })()`);
+
+  // Удаление одной записи через подтверждение.
+  await evaluate(`(() => {
+    const card = document.querySelector('[data-record-id="smoke-record-1"]');
+    if (card) card.querySelector('.record-card__remove').click();
+  })()`);
+  await sleep(250);
+  results.recordingsConfirm = await evaluate(`(() => ({
+    open: !document.querySelector('#modal-confirm').hidden,
+    title: document.querySelector('#confirm-title').textContent,
+  }))()`);
+  await evaluate(`document.querySelector('#confirm-ok').click()`);
+  await sleep(500);
+  results.recordingsDelete = await evaluate(`(async () => ({
+    rows: document.querySelectorAll('#recordings-list .record-card').length,
+    stored: (await MR.recordings.list()).length,
+    hasFake: Boolean(document.querySelector('[data-record-id="smoke-record-1"]')),
+    count: document.querySelector('#recordings-count').textContent,
+  }))()`);
+
+  await screenshot("recordings.png");
+
+  // Очистка всего архива.
+  await evaluate(`document.querySelector('#recordings-clear').click()`);
+  await sleep(250);
+  await evaluate(`document.querySelector('#confirm-ok').click()`);
+  await sleep(500);
+  results.recordingsClear = await evaluate(`(async () => ({
+    rows: document.querySelectorAll('#recordings-list .record-card').length,
+    stored: (await MR.recordings.list()).length,
+    emptyVisible: !document.querySelector('#recordings-empty').hidden,
+    clearHidden: document.querySelector('#recordings-clear').hidden,
+    count: document.querySelector('#recordings-count').textContent,
+  }))()`);
+  await screenshot("recordings-empty.png");
+  await evaluate(`document.querySelector('#tab-stations').click()`);
+  await sleep(200);
+
   await evaluate(`MR.audio.stop()`);
 
   results.stats = await evaluate(`(() => {

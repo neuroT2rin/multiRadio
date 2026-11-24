@@ -1,5 +1,5 @@
 /**
- * ui/views.js — переключение разделов «Станции / Избранные / Эквалайзер».
+ * ui/views.js — переключение разделов «Станции / Избранные / Эквалайзер / Записи».
  * Панели и кнопки-табы синхронизируются с state.view.
  */
 (function (global) {
@@ -57,6 +57,7 @@
       "view:stations": function () { store.setView("stations"); },
       "view:favorites": function () { store.setView("favorites"); },
       "view:equalizer": function () { store.setView("equalizer"); },
+      "view:recordings": function () { store.setView("recordings"); },
     });
 
     tabs.forEach(function (tab) {

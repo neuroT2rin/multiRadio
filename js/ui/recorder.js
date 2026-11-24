@@ -26,7 +26,7 @@
     button.classList.toggle("is-recording", active);
     button.setAttribute("aria-pressed", String(active));
     button.setAttribute("aria-label", active ? "Остановить запись эфира" : "Записать эфир");
-    button.title = active ? "Остановить запись и сохранить файл" : "Записать эфир (личная копия)";
+    button.title = active ? "Остановить запись и сохранить в архив" : "Записать эфир (личная копия)";
 
     if (chip) {
       chip.hidden = !active;
