@@ -114,7 +114,7 @@ tests/  store.test.js · browser-smoke.js
 utils → config/app → config/stations → config/equalizer → storage → state → dom
 → analyser → audio → network → health → stats → recorder → timemachine
 → toast → modal → commands → views → nav → header → player → stations → groups
-→ plan → equalizer → station-form → settings → info → stats → sleep-timer → voice-search
+→ equalizer → station-form → settings → info → stats → sleep-timer → voice-search
 → recorder → timemachine → theme → visualizer/mini → visualizer/background
 → visualizer/index → main
 ```
@@ -152,7 +152,6 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/player.js` | Карточка «сейчас играет», управление, громкость, `Space` | `init`, `render` |
 | `js/ui/stations.js` | Списки станций/избранного, поиск, фильтры, вид «список/плитка», точки здоровья | `init`, `render` |
 | `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой) | `init`, `render`, `openEditor(groupId)` |
-| `js/ui/plan.js` | Панель «План эфира»: сейчас и следующие станции по списку | `init`, `render` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
 | `js/ui/settings.js` | Настройки вида, compat, export/import/reset | `init`, `open` |
@@ -378,8 +377,8 @@ document.querySelector("#stations-list").appendChild(row);
 Прочее:   modal-confirm, confirm-title, confirm-message, confirm-ok, confirm-cancel,
           info-connection, info-connection-state, info-source, info-bitrate,
           info-playback, info-health, recheck-btn, recheck-label,
-          plan-now, plan-next, plan-now-state, stats-total, stats-stations,
-          stats-genres, stats-empty, bg-visualizer, bg-canvas, uptime, toast-region
+          stats-total, stats-stations, stats-genres, stats-empty,
+          bg-visualizer, bg-canvas, uptime, toast-region
 ```
 
 Полный список: `grep 'id="' index.html`. ID — контракт: если переименовываешь,
@@ -546,7 +545,6 @@ VPN точно определить нельзя — не обещать это�
 | Таймер сна | `ui/sleep-timer.js`, меню в шапке | `sleep-timer.js`, `index.html`, `main.js` | запуск/отмена, отсчёт, остановка |
 | Голосовой подбор станции | `ui/voice-search.js`, `index.html` (toolbar) | те же | `MR.voiceSearch.match()`, микрофон, fallback |
 | Статистика прослушивания | `services/stats.js`, `ui/stats.js` | те же + `index.html` (сайдбар) | включить радио, подождать, панель |
-| План эфира | `ui/plan.js`, `index.html` (под «Источники и сеть») | те же | текущая станция + 3 следующие |
 | Светлая тема | `ui/theme.js`, `css/base.css` (токены), блоки `html[data-theme="light"]` во всех css | те же + `state.js` | переключение, reload, контраст |
 | Запись эфира | `services/recorder.js`, `services/audio.js` (`getCaptureStream`), `ui/recorder.js` | те же + `player.css` | старт/стоп, файл, CORS-режим |
 | Тайм-машина | `services/timemachine.js`, `services/audio.js` (`createPCMTap`), `ui/timemachine.js` | те же + `player.css` | буфер, отмотка, LIVE, память |
