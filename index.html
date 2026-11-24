@@ -64,6 +64,9 @@
             <button class="nav-item" type="button" data-command="station:add">
               <span class="nav-item__ico" aria-hidden="true">➕</span> Добавить станцию
             </button>
+            <button class="nav-item" type="button" data-command="search:open">
+              <span class="nav-item__ico" aria-hidden="true">🔎</span> Поиск станций
+            </button>
             <button class="nav-item" type="button" data-command="group:create">
               <span class="nav-item__ico" aria-hidden="true">🗂</span> Создать группу
             </button>
@@ -375,6 +378,11 @@
               <span class="quick-action__title">Станция</span>
               <span class="quick-action__hint">Свой поток и резервы</span>
             </button>
+            <button class="quick-action" type="button" data-command="search:open">
+              <span class="quick-action__ico" aria-hidden="true">🔎</span>
+              <span class="quick-action__title">Поиск</span>
+              <span class="quick-action__hint">Каталоги станций</span>
+            </button>
             <button class="quick-action" type="button" data-command="stats:open">
               <span class="quick-action__ico" aria-hidden="true">📊</span>
               <span class="quick-action__title">Статистика</span>
@@ -662,6 +670,55 @@
     </div>
   </div>
 
+  <!-- Поиск станций по каталогам -->
+  <div class="modal" id="modal-search" role="dialog" aria-modal="true" aria-labelledby="search-modal-title" hidden>
+    <div class="modal__backdrop" data-close-modal></div>
+    <div class="modal__panel modal__panel--search" role="document">
+      <header class="modal__header">
+        <div>
+          <h2 class="modal__title" id="search-modal-title">Поиск станций</h2>
+          <p class="modal__subtitle">Radio Browser, SomaFM, Radio Paradise, Radio France, Radio Record и HostingRadio — сразу по всем каталогам.</p>
+        </div>
+        <button class="icon-btn modal__close" type="button" data-close-modal aria-label="Закрыть">✕</button>
+      </header>
+      <div class="modal__body">
+        <div class="search-filters" role="search" aria-label="Фильтры поиска станций">
+          <div class="field search-filters__query">
+            <label class="field__label" for="search-query">Название</label>
+            <input class="input" type="search" id="search-query" placeholder="Например, Groove Salad" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label class="field__label" for="search-country">Страна</label>
+            <select class="input input--compact" id="search-country"></select>
+          </div>
+          <div class="field">
+            <label class="field__label" for="search-genre">Жанр / тег</label>
+            <input class="input" type="text" id="search-genre" placeholder="ambient, jazz, rock…" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label class="field__label" for="search-language">Язык</label>
+            <select class="input input--compact" id="search-language"></select>
+          </div>
+        </div>
+        <div class="search-toolbar">
+          <div class="view-switch" role="group" aria-label="Вид результатов поиска">
+            <button class="view-switch__btn" type="button" data-search-view="list" aria-pressed="true" aria-label="Списком" title="Списком">☰</button>
+            <button class="view-switch__btn" type="button" data-search-view="grid" aria-pressed="false" aria-label="Плиткой" title="Плиткой">▦</button>
+          </div>
+          <span class="search-count" id="search-count" role="status" aria-live="polite">0 станций</span>
+          <span class="search-status" id="search-status" hidden></span>
+          <button class="btn btn-ghost btn-sm search-clear" type="button" id="search-clear">Сбросить</button>
+        </div>
+        <p class="search-error" id="search-error" role="alert" hidden></p>
+        <ul class="search-results" id="search-results" aria-label="Найденные станции"></ul>
+        <div class="empty-state empty-state--compact" id="search-empty" hidden>
+          <p class="empty-state__title">Ничего не найдено</p>
+          <p class="empty-state__text">Попробуйте изменить название, страну или жанр.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Подтверждение -->
   <div class="modal" id="modal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" hidden>
     <div class="modal__backdrop" data-close-modal></div>
@@ -708,6 +765,7 @@
   <script src="js/config/app.js"></script>
   <script src="js/config/stations.js"></script>
   <script src="js/config/equalizer.js"></script>
+  <script src="js/config/search-providers.js"></script>
   <script src="js/core/storage.js"></script>
   <script src="js/core/state.js"></script>
   <script src="js/core/dom.js"></script>
@@ -716,6 +774,7 @@
   <script src="js/services/audio.js"></script>
   <script src="js/services/network.js"></script>
   <script src="js/services/health.js"></script>
+  <script src="js/services/radio-search.js"></script>
   <script src="js/services/stats.js"></script>
   <script src="js/services/recorder.js"></script>
   <script src="js/services/timemachine.js"></script>
@@ -731,6 +790,7 @@
   <script src="js/ui/groups.js"></script>
   <script src="js/ui/equalizer.js"></script>
   <script src="js/ui/station-form.js"></script>
+  <script src="js/ui/station-search.js"></script>
   <script src="js/ui/settings.js"></script>
   <script src="js/ui/info.js"></script>
   <script src="js/ui/stats.js"></script>

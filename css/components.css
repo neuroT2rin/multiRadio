@@ -1437,6 +1437,246 @@ body.modal-open {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Поиск станций по каталогам
+   -------------------------------------------------------------------------- */
+
+.modal__panel--search {
+  width: min(96vw, 980px);
+  max-height: min(90vh, 940px);
+}
+
+.search-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.search-filters__query {
+  grid-column: span 2;
+}
+
+.search-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 10px;
+}
+
+.search-count {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.search-status {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.search-status::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: spin 0.7s linear infinite;
+}
+
+.search-clear {
+  margin-left: auto;
+}
+
+.search-error {
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--warning);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 10px;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 48vh;
+  padding-right: 2px;
+  overflow-y: auto;
+}
+
+.search-results--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  align-content: start;
+}
+
+.search-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(4, 8, 16, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 0.16s, background 0.16s;
+}
+
+.search-card:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: var(--border-strong);
+}
+
+.search-results--grid .search-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.search-card__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.search-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-card__name {
+  overflow: hidden;
+  font-size: 0.87rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-card__badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.search-card__meta {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-card__extra {
+  margin-top: 1px;
+  overflow: hidden;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-card__side {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-results--grid .search-card__side {
+  justify-content: space-between;
+  padding-top: 2px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.search-card__add {
+  gap: 6px;
+}
+
+.search-card__add.is-added,
+.search-card__add:disabled {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: var(--border);
+  box-shadow: none;
+  opacity: 0.8;
+}
+
+.search-card--skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 62px;
+}
+
+.search-skeleton__line {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.search-skeleton__line--title {
+  width: 46%;
+  height: 12px;
+}
+
+.search-skeleton__line--meta {
+  width: 72%;
+}
+
+.search-skeleton__line::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+@media (max-width: 720px) {
+  .search-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .search-filters__query {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 430px) {
+  .search-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .search-filters__query {
+    grid-column: auto;
+  }
+
+  .search-results--grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .search-card {
+    flex-wrap: wrap;
+  }
+
+  .search-card__side {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 /* ==========================================================================
    Светлая тема — компоненты
    ========================================================================== */
@@ -1563,3 +1803,34 @@ html[data-theme="light"] .settings-row:hover {
 html[data-theme="light"] .import-drop {
   background: rgba(255, 255, 255, 0.6);
 }
+
+
+html[data-theme="light"] .search-card {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="light"] .search-card:hover {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .search-skeleton__line {
+  background: rgba(20, 40, 70, 0.07);
+}
+
+html[data-theme="light"] .search-skeleton__line::after {
+  background: linear-gradient(90deg, transparent, rgba(20, 40, 70, 0.1), transparent);
+}
+
+html[data-theme="light"] .search-error {
+  color: var(--warning);
+  background: rgba(154, 100, 0, 0.08);
+  border-color: rgba(154, 100, 0, 0.25);
+}
+
+html[data-theme="light"] .search-card__add.is-added,
+html[data-theme="light"] .search-card__add:disabled {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: var(--border);
+}
+

@@ -1056,6 +1056,131 @@ async function main() {
     return result;
   })()`);
 
+  // ===== Поиск станций по каталогам =====
+  // Открытие из «Быстрых действий» и меню «Радио».
+  results.searchOpen = await evaluate(`(() => {
+    const quick = document.querySelector('.quick-action[data-command="search:open"]');
+    const menu = document.querySelector('.nav-item[data-command="search:open"]');
+    quick.click();
+    return {
+      quick: Boolean(quick),
+      menu: Boolean(menu),
+      open: !document.querySelector('#modal-search').hidden,
+      title: document.querySelector('#search-modal-title').textContent,
+      providers: MR.searchProviders.providers.length,
+      fallbackStations: MR.radioSearch.getFallbackMatches({}).length,
+      countryOptions: document.querySelectorAll('#search-country option').length,
+      languageOptions: document.querySelectorAll('#search-language option').length,
+    };
+  })()`);
+  await sleep(1400);
+
+  results.searchPanel = await evaluate(`(() => {
+    const cards = Array.from(document.querySelectorAll('#search-results .search-card'))
+      .filter((card) => !card.classList.contains('search-card--skeleton'));
+    return {
+      cards: cards.length,
+      count: document.querySelector('#search-count').textContent,
+      names: cards.slice(0, 4).map((card) => card.querySelector('.search-card__name').textContent),
+      badges: document.querySelectorAll('#search-results .search-card .station-row__group').length,
+      addButtons: document.querySelectorAll('#search-results [data-search-add]').length,
+      healthDots: document.querySelectorAll('#search-results .health-dot').length,
+      healthStates: Array.from(document.querySelectorAll('#search-results .health-dot'))
+        .map((dot) => dot.dataset.health),
+      errorHidden: document.querySelector('#search-error').hidden,
+      statusHidden: document.querySelector('#search-status').hidden,
+    };
+  })()`);
+  await screenshot("search-panel.png");
+
+  // Ввод названия (debounce 300 мс) и результаты.
+  await evaluate(`(() => {
+    const input = document.querySelector('#search-query');
+    input.value = 'groove';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await sleep(1100);
+  results.searchQuery = await evaluate(`(() => ({
+    cards: document.querySelectorAll('#search-results .search-card:not(.search-card--skeleton)').length,
+    names: Array.from(document.querySelectorAll('#search-results .search-card__name'))
+      .map((node) => node.textContent),
+    count: document.querySelector('#search-count').textContent,
+  }))()`);
+
+  // Переключение вида «список / плитка».
+  await evaluate(`document.querySelector('[data-search-view="grid"]').click()`);
+  await sleep(150);
+  results.searchView = await evaluate(`(() => ({
+    grid: document.querySelector('#search-results').classList.contains('search-results--grid'),
+    listPressed: document.querySelector('[data-search-view="list"]').getAttribute('aria-pressed'),
+    gridPressed: document.querySelector('[data-search-view="grid"]').getAttribute('aria-pressed'),
+  }))()`);
+  await screenshot("search-grid.png");
+  await evaluate(`document.querySelector('[data-search-view="list"]').click()`);
+  await sleep(100);
+
+  // Добавление станции из результатов и повторный клик по кнопке.
+  results.searchAdd = await evaluate(`(async () => {
+    const before = MR.store.state.stations.length;
+    const findCard = () => Array.from(document.querySelectorAll('#search-results .search-card'))
+      .find((node) => {
+        const label = node.querySelector('.search-card__name');
+        return label && label.textContent === 'FIP Groove';
+      }) || Array.from(document.querySelectorAll('#search-results .search-card'))
+      .find((node) => node.querySelector('[data-search-add]') && !node.querySelector('[data-search-add]').disabled);
+
+    const firstCard = findCard();
+    const name = firstCard.querySelector('.search-card__name').textContent;
+    firstCard.querySelector('[data-search-add]').click();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const afterFirst = MR.store.state.stations.length;
+    const added = MR.store.state.stations.find((station) => station.name === name) || null;
+
+    const addedCard = findCard();
+    const addedButton = addedCard ? addedCard.querySelector('[data-search-add]') : null;
+    if (addedButton) addedButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    return {
+      name: name,
+      before: before,
+      afterFirst: afterFirst,
+      afterSecond: MR.store.state.stations.length,
+      buttonDisabled: addedButton ? addedButton.disabled : null,
+      buttonText: addedButton ? addedButton.textContent.trim() : '',
+      emoji: added ? added.emoji : '',
+      sources: added ? added.sources.length : 0,
+      toasts: document.querySelectorAll('.toast--success').length,
+      storeHas: Boolean(added),
+    };
+  })()`);
+
+  // Индикатор работоспособности видимых карточек.
+  await sleep(1500);
+  results.searchHealth = await evaluate(`(() => ({
+    states: Array.from(document.querySelectorAll('#search-results .health-dot'))
+      .map((dot) => dot.dataset.health),
+    allKnown: Array.from(document.querySelectorAll('#search-results .health-dot'))
+      .every((dot) => ['checking', 'online', 'fallback', 'offline', 'unknown'].indexOf(dot.dataset.health) !== -1),
+  }))()`);
+
+  await evaluate(`document.querySelector('#modal-search [data-close-modal]').click()`);
+  await sleep(250);
+  results.searchClosed = await evaluate(`(() => ({
+    closed: document.querySelector('#modal-search').hidden,
+    modalOpen: MR.modal.hasOpen,
+  }))()`);
+
+  // Открытие из меню «Радио» (вторая точка входа).
+  results.searchFromMenu = await evaluate(`(() => {
+    document.querySelector('.nav-item[data-command="search:open"]').click();
+    return { open: !document.querySelector('#modal-search').hidden };
+  })()`);
+  await sleep(250);
+  results.searchFocus = await evaluate(`document.activeElement ? document.activeElement.id : ''`);
+  await evaluate(`MR.modal.close('#modal-search')`);
+  await sleep(200);
+
   // Мобильный вид
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
