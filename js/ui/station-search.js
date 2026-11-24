@@ -33,6 +33,10 @@
   let viewButtons = [];
   let clearButton = null;
   let offStations = null;
+  let addMenu = null;
+  let addMenuPanel = null;
+  let menuContext = null;
+  const documentOffs = [];
 
   const state = {
     open: false,
@@ -177,6 +181,21 @@
       dom.el("span", { class: "search-card__add-label", text: "Добавить" })
     );
 
+    const addToggle = dom.el("button", {
+      class: "btn btn-primary btn-sm search-card__add-toggle",
+      type: "button",
+      "data-search-add-toggle": "",
+      "data-search-index": String(index),
+      title: "Добавить в группу",
+      "aria-label": "Добавить в группу",
+      "aria-haspopup": "menu",
+      "aria-expanded": "false",
+    },
+      dom.el("span", { "aria-hidden": "true", text: "▾" })
+    );
+
+    const addGroup = dom.el("div", { class: "search-card__add-group" }, addButton, addToggle);
+
     const existing = MR.radioSearch.findStationByRecord(record);
     setButtonAdded(addButton, record, Boolean(existing));
 
@@ -195,13 +214,14 @@
           ? dom.el("p", { class: "search-card__extra", text: extraParts.join(" · ") })
           : null
       ),
-      dom.el("div", { class: "search-card__side" }, dot, addButton)
+      dom.el("div", { class: "search-card__side" }, dot, addGroup)
     );
 
     state.cardNodes.set(key, {
       card: card,
       dot: dot,
       button: addButton,
+      toggle: addToggle,
       record: record,
     });
 
@@ -228,6 +248,8 @@
 
   function render() {
     if (!resultsList) return;
+
+    closeGroupMenu({ refocus: false });
 
     viewButtons.forEach(function (button) {
       button.setAttribute("aria-pressed", String(button.dataset.searchView === state.view));
@@ -363,6 +385,273 @@
   }
 
   /* ------------------------------------------------------------------------
+     Меню выбора группы (правая часть разделённой кнопки)
+     ------------------------------------------------------------------------ */
+
+  const MENU_GAP = 6;
+  const MENU_EDGE = 8;
+
+  function clearNode(node) {
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function normalizeStationName(name) {
+    return String(name || "").trim().toLowerCase();
+  }
+
+  /**
+   * Станция в коллекции: сначала по пересечению URL, затем по названию —
+   * каталоги иногда отдают тот же поток по другому адресу.
+   */
+  function findStationForRecord(record) {
+    const byUrl = MR.radioSearch.findStationByRecord(record);
+    if (byUrl) return byUrl;
+
+    const name = normalizeStationName(record && record.name);
+    if (!name) return null;
+
+    return store.state.stations.find(function (station) {
+      return normalizeStationName(station.name) === name;
+    }) || null;
+  }
+
+  function ensureGroupMenu() {
+    if (addMenu && addMenu.isConnected) return addMenu;
+
+    addMenuPanel = modal.querySelector(".modal__panel") || modal;
+    addMenu = dom.el("div", {
+      class: "search-add-menu",
+      role: "menu",
+      "aria-label": "Группы станций",
+      hidden: true,
+    });
+
+    addMenu.addEventListener("click", onGroupMenuClick);
+    addMenu.addEventListener("keydown", onGroupMenuKeydown);
+    addMenuPanel.appendChild(addMenu);
+    return addMenu;
+  }
+
+  function createGroupMenuItem(options) {
+    const opts = options || {};
+    const classes = ["search-add-menu__item"];
+    if (opts.current) classes.push("is-current");
+    if (opts.create) classes.push("search-add-menu__item--create");
+
+    return dom.el("button", {
+      class: classes.join(" "),
+      type: "button",
+      role: "menuitem",
+      dataset: opts.dataset || {},
+      disabled: opts.disabled ? true : null,
+      "aria-current": opts.current ? "true" : null,
+    },
+      opts.current
+        ? dom.el("span", { class: "search-add-menu__check", "aria-hidden": "true", text: "✓" })
+        : null,
+      dom.el("span", { class: "search-add-menu__label", text: opts.label || "" }),
+      opts.count === undefined || opts.count === null
+        ? null
+        : dom.el("span", { class: "search-add-menu__count", text: String(opts.count) })
+    );
+  }
+
+  function fillGroupMenu(currentGroupId) {
+    clearNode(addMenu);
+
+    const groups = (store.state.groups || []).slice().sort(function (a, b) {
+      return a.name.localeCompare(b.name, "ru");
+    });
+
+    addMenu.appendChild(createGroupMenuItem({
+      dataset: { groupOption: "" },
+      label: "Без группы",
+      current: !currentGroupId,
+    }));
+
+    if (!groups.length) {
+      addMenu.appendChild(dom.el("button", {
+        class: "search-add-menu__item is-disabled",
+        type: "button",
+        role: "menuitem",
+        disabled: true,
+        "aria-disabled": "true",
+        text: "Групп пока нет",
+      }));
+    } else {
+      groups.forEach(function (group) {
+        addMenu.appendChild(createGroupMenuItem({
+          dataset: { groupOption: group.id },
+          label: group.name,
+          count: group.stationIds.length,
+          current: group.id === currentGroupId,
+        }));
+      });
+    }
+
+    addMenu.appendChild(dom.el("div", { class: "search-add-menu__sep", role: "separator" }));
+    addMenu.appendChild(createGroupMenuItem({
+      dataset: { groupCreate: "" },
+      label: "Создать группу…",
+      create: true,
+    }));
+  }
+
+  function menuItems() {
+    if (!addMenu) return [];
+    return Array.prototype.slice.call(addMenu.querySelectorAll('[role="menuitem"]'))
+      .filter(function (node) { return node.tagName === "BUTTON" && !node.disabled; });
+  }
+
+  function positionGroupMenu(button) {
+    const panel = addMenuPanel;
+    if (!panel || !button) return;
+
+    const panelRect = panel.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    const width = addMenu.offsetWidth;
+    const height = addMenu.offsetHeight;
+    const maxLeft = Math.max(MENU_EDGE, panel.clientWidth - width - MENU_EDGE);
+
+    let left = utils.clamp(buttonRect.right - panelRect.left - width, MENU_EDGE, maxLeft);
+    let top = buttonRect.bottom - panelRect.top + MENU_GAP;
+
+    const bottomLimit = panel.clientHeight - MENU_EDGE;
+    if (top + height > bottomLimit) {
+      const above = buttonRect.top - panelRect.top - height - MENU_GAP;
+      top = above >= MENU_EDGE ? above : Math.max(MENU_EDGE, bottomLimit - height);
+    }
+
+    addMenu.style.left = Math.round(left) + "px";
+    addMenu.style.top = Math.round(top) + "px";
+  }
+
+  function closeGroupMenu(options) {
+    const opts = options || {};
+    const context = menuContext;
+    menuContext = null;
+
+    if (!addMenu || addMenu.hidden) return;
+
+    addMenu.hidden = true;
+    if (context && context.button) {
+      context.button.setAttribute("aria-expanded", "false");
+      if (opts.refocus) {
+        try { context.button.focus({ preventScroll: true }); } catch (error) { /* noop */ }
+      }
+    }
+  }
+
+  function openGroupMenu(button, index) {
+    const record = state.results[index];
+    if (!button || !record) return;
+
+    closeGroupMenu({ refocus: false });
+    ensureGroupMenu();
+
+    const existing = findStationForRecord(record);
+    const currentGroup = existing ? store.getGroupOfStation(existing.id) : null;
+    fillGroupMenu(currentGroup ? currentGroup.id : "");
+
+    menuContext = { button: button, index: index, record: record };
+    button.setAttribute("aria-expanded", "true");
+    addMenu.hidden = false;
+    positionGroupMenu(button);
+
+    const first = menuItems()[0];
+    if (first) {
+      try { first.focus({ preventScroll: true }); } catch (error) { first.focus(); }
+    }
+  }
+
+  function toggleGroupMenu(button, index) {
+    if (menuContext && menuContext.button === button && addMenu && !addMenu.hidden) {
+      closeGroupMenu({ refocus: true });
+      return;
+    }
+    openGroupMenu(button, index);
+  }
+
+  function groupMenuItemFromEvent(event) {
+    const target = event.target;
+    if (!target || typeof target.closest !== "function") return null;
+    return target.closest("[data-group-option], [data-group-create]");
+  }
+
+  function onGroupMenuClick(event) {
+    const item = groupMenuItemFromEvent(event);
+    if (!item || !addMenu || !addMenu.contains(item) || item.disabled) return;
+
+    event.preventDefault();
+
+    if (item.hasAttribute("data-group-create")) {
+      // Фокус возвращаем на шеврон: после закрытия редактора он вернётся сюда.
+      closeGroupMenu({ refocus: true });
+      if (MR.groupsUI && typeof MR.groupsUI.openEditor === "function") {
+        MR.groupsUI.openEditor(null);
+      }
+      return;
+    }
+
+    const context = menuContext;
+    if (!context) {
+      closeGroupMenu({ refocus: false });
+      return;
+    }
+
+    applyGroupChoice(context, item.getAttribute("data-group-option") || null);
+  }
+
+  function onGroupMenuKeydown(event) {
+    const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+    if (keys.indexOf(event.key) === -1) return;
+    if (!addMenu || addMenu.hidden) return;
+
+    const items = menuItems();
+    if (!items.length) return;
+
+    event.preventDefault();
+    const current = items.indexOf(document.activeElement);
+    let next = current;
+
+    if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    else if (event.key === "ArrowDown") next = current < 0 ? 0 : (current + 1) % items.length;
+    else if (event.key === "ArrowUp") next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
+
+    const target = items[next];
+    if (target) target.focus();
+  }
+
+  function onDocumentKeydown(event) {
+    if (event.key !== "Escape") return;
+    if (!addMenu || addMenu.hidden) return;
+    // Меню перехватывает Esc раньше модалки: она не должна закрываться.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeGroupMenu({ refocus: true });
+  }
+
+  function onDocumentClick(event) {
+    if (!addMenu || addMenu.hidden) return;
+    const target = event.target;
+    if (!(target instanceof global.Element)) return;
+    if (addMenu.contains(target)) return;
+    if (target.closest("[data-search-add-toggle]")) return;
+    closeGroupMenu({ refocus: false });
+  }
+
+  function onViewportChange() {
+    closeGroupMenu({ refocus: false });
+  }
+
+  function onPanelScroll(event) {
+    if (!addMenu || addMenu.hidden) return;
+    if (addMenu.contains(event.target)) return;
+    closeGroupMenu({ refocus: false });
+  }
+
+  /* ------------------------------------------------------------------------
      Поиск
      ------------------------------------------------------------------------ */
 
@@ -421,6 +710,13 @@
      Добавление
      ------------------------------------------------------------------------ */
 
+  function addErrorMessage(errors) {
+    const map = errors || {};
+    return map.general || map.name || map.sources ||
+      Object.keys(map).map(function (key) { return map[key]; })[0] ||
+      "Не удалось добавить станцию.";
+  }
+
   function addResult(index) {
     const record = state.results[index];
     if (!record) return;
@@ -439,11 +735,75 @@
       return;
     }
 
-    const errors = result.errors || {};
-    const message = errors.general || errors.name || errors.sources ||
-      Object.keys(errors).map(function (key) { return errors[key]; })[0] ||
-      "Не удалось добавить станцию.";
-    MR.toast.error(message);
+    MR.toast.error(addErrorMessage(result.errors));
+  }
+
+  /** Вход в store.addStation для записи каталога — как в radio-search, плюс группа. */
+  function buildStationInput(record, groupId) {
+    const limits = (MR.config && MR.config.audio) || {};
+    const maxSources = limits.maxSources || 6;
+    const sources = (record.sources || []).slice(0, maxSources).map(function (source) {
+      return { url: source.url, bitrate: source.bitrate || 0 };
+    });
+
+    return {
+      name: record.name,
+      emoji: "🎧",
+      genre: record.genre,
+      sources: sources,
+      groupId: groupId || "",
+    };
+  }
+
+  /**
+   * Пункт меню выбран: станция либо добавляется сразу в группу, либо
+   * (если уже есть в коллекции) переносится — без дубликата.
+   */
+  function applyGroupChoice(context, groupId) {
+    const record = context.record;
+    const group = groupId ? store.getGroup(groupId) : null;
+
+    if (groupId && !group) {
+      MR.toast.error("Группа не найдена — возможно, её уже удалили.");
+      syncAddedStates();
+      closeGroupMenu({ refocus: false });
+      return;
+    }
+
+    const existing = findStationForRecord(record);
+
+    if (existing) {
+      const previousGroup = store.getGroupOfStation(existing.id);
+      const assigned = store.assignStationToGroup(existing.id, groupId);
+      if (!assigned) {
+        MR.toast.error("Не удалось изменить группу станции.");
+      } else if (group) {
+        MR.toast.success("Добавлено в группу «" + group.name + "».", { timeout: 2800 });
+      } else if (previousGroup) {
+        MR.toast.success("Станция «" + existing.name + "» убрана из группы.", { timeout: 2800 });
+      } else {
+        MR.toast.info("Станция «" + existing.name + "» уже без группы.");
+      }
+      syncAddedStates();
+      closeGroupMenu({ refocus: true });
+      return;
+    }
+
+    const result = store.addStation(buildStationInput(record, groupId));
+    if (result.ok) {
+      MR.toast.success(
+        group
+          ? "Добавлено в группу «" + group.name + "»."
+          : "Станция «" + result.station.name + "» добавлена.",
+        { timeout: 2800 }
+      );
+      syncAddedStates();
+      closeGroupMenu({ refocus: true });
+      return;
+    }
+
+    MR.toast.error(addErrorMessage(result.errors));
+    closeGroupMenu({ refocus: false });
   }
 
   /* ------------------------------------------------------------------------
@@ -453,6 +813,8 @@
   function cleanupSearch() {
     state.open = false;
     state.seq += 1;
+
+    closeGroupMenu({ refocus: false });
 
     if (state.controller) state.controller.abort();
     if (state.healthController) state.healthController.abort();
@@ -537,11 +899,24 @@
 
     if (resultsList) {
       resultsList.addEventListener("click", function (event) {
+        const toggle = event.target.closest("[data-search-add-toggle]");
+        if (toggle && !toggle.disabled) {
+          toggleGroupMenu(toggle, Number(toggle.dataset.searchIndex));
+          return;
+        }
+
         const button = event.target.closest("[data-search-add]");
         if (!button || button.disabled) return;
         addResult(Number(button.dataset.searchIndex));
       });
     }
+
+    // Esc и клик вне: слушатели ставятся до открытия модалки, поэтому
+    // перехватывают Esc раньше её собственного обработчика.
+    documentOffs.push(dom.on(document, "keydown", onDocumentKeydown, true));
+    documentOffs.push(dom.on(document, "click", onDocumentClick));
+    documentOffs.push(dom.on(global, "resize", onViewportChange));
+    if (modalBody) documentOffs.push(dom.on(modalBody, "scroll", onPanelScroll, true));
 
     offStations = store.on("stations", syncAddedStates);
   }
@@ -550,6 +925,13 @@
     cleanupSearch();
     if (offStations) offStations();
     offStations = null;
+    while (documentOffs.length) {
+      const off = documentOffs.pop();
+      if (typeof off === "function") off();
+    }
+    if (addMenu && addMenu.parentNode) addMenu.parentNode.removeChild(addMenu);
+    addMenu = null;
+    addMenuPanel = null;
     MR.radioSearch.dispose();
   }
 
