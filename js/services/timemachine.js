@@ -2,21 +2,26 @@
  * services/timemachine.js — «машина времени» эфира.
  *
  * В памяти держится последние несколько минут звука в моно-PCM (16 кГц):
- * это ~38 МБ на 10 минут и позволяет точно отмотать назад. Перемотка строит
- * WAV из выбранного места и проигрывает его отдельным <audio>, живой поток
- * не ставится на паузу, а глушится, чтобы буфер продолжал писаться.
+ * это ~38 МБ на 10 минут и позволяет точно отмотать назад.
  *
- * Воспроизведение буфера — непрерывная лента. В PCM-таймлайне хранятся
- * абсолютная позиция прослушивания (cursor) и текущая граница записи
- * (totalSamples). Когда WAV подходит к концу, заранее (за PREBUILD_LEAD
- * секунд) строится следующий сегмент — от абсолютной позиции конца текущего
- * до актуальной границы записи. На `ended` он сразу запускается, поэтому
- * воспроизведение продолжается без прыжка в живой эфир и без пропуска
- * записанных секунд. Если новых сэмплов ещё нет, ждём коротким таймером и
- * повторяем: эфир всё это время остаётся заглушённым и продолжает писаться.
+ * Воспроизведение буфера — непрерывная лента в общем AudioContext. В
+ * PCM-таймлайне хранятся абсолютная позиция прослушивания (cursor) и текущая
+ * граница записи (totalSamples). Звук идёт через отдельную шину AudioContext
+ * (мимо GainNode и эквалайзера живого эфира), а сегменты планируются заранее:
+ * следующий сегмент строится за PREBUILD_LEAD секунд до конца текущего и
+ * ставится в график ровно на момент окончания предыдущего. Поэтому стыки
+ * получаются без паузы, а на `ended` никто не возвращается в живой эфир.
+ * Если новых сэмплов ещё нет, ждём коротким таймером и повторяем: эфир всё
+ * это время остаётся заглушённым и продолжает писаться.
  *
- * Пауза не стирает данные: звучащий буфер ставится на паузу и продолжает с
- * выбранного места. Остановка и смена станции сбрасывают буфер.
+ * Запись PCM и воспроизведение буфера живут на одном AudioContext, поэтому
+ * позиция не уплывает относительно записанного звука. Пока звучит буфер,
+ * транзиентная «буферизация» беззвучного живого эфира не показывается:
+ * пользователь слушает буфер, а не эфир.
+ *
+ * Пауза не стирает данные: звучащий буфер останавливается, позиция
+ * сохраняется, Play продолжает с того же места. Остановка и смена станции
+ * сбрасывают буфер.
  */
 (function (global) {
   "use strict";
@@ -27,12 +32,15 @@
   const config = MR.config;
 
   const TARGET_RATE = 16000;
-  /** За сколько секунд до конца сегмента готовим следующий WAV. */
+  /** Запас перед стартом/возобновлением буфера, секунды. */
+  const START_LEAD = 0.05;
+  /** Минимальный запас, чтобы успеть поставить источник в график. */
+  const MIN_START_GAP = 0.02;
+  /** За сколько секунд до конца сегмента готовим следующий. */
   const PREBUILD_LEAD = 0.6;
   /** Пауза перед повтором, если записанных сэмплов ещё нет. */
   const CHAIN_RETRY_MS = 150;
-  /** Сколько неудачных запусков/ожиданий терпим, прежде чем вернуться в эфир. */
-  const MAX_CHAIN_FAILURES = 8;
+  /** Сколько повторов терпим, прежде чем вернуться в эфир. */
   const MAX_CHAIN_WAITS = 100;
 
   let tap = null;
@@ -41,23 +49,25 @@
   let totalSamples = 0;
   let sourceRate = 44100;
 
+  /** Шина AudioContext: { context, gain }. */
+  let bus = null;
+  /** Запланированные и звучащие сегменты. */
+  let scheduled = [];
+  /** Сегмент, подготовленный для паузы/перемотки, но ещё не запущенный. */
+  let pendingSegment = null;
+
   /** Абсолютная позиция прослушивания в PCM-таймлайне, в сэмплах. */
   let cursor = 0;
+  let lastEndSample = 0;
+  let lastEndTime = 0;
   let buffered = false;
   /** Буфер намеренно приостановлен (пауза плеера или пауза эфира). */
   let bufferPaused = false;
 
-  let activeEl = null;
-  let spareEl = null;
-  let pendingEl = null;
-  let segmentStart = 0;
-  let segmentEnd = 0;
-
   let advanceTimer = null;
-  let chainTimer = null;
-  let chainFailures = 0;
+  let retryTimer = null;
   let chainWaits = 0;
-  let chainToken = 0;
+  let suppressStatus = false;
 
   let activeStationId = null;
   let emitTimer = null;
@@ -147,7 +157,7 @@
   }
 
   /* ------------------------------------------------------------------------
-     PCM-таймлайн → WAV
+     PCM-таймлайн → AudioBuffer
      ------------------------------------------------------------------------ */
 
   /** Копирует записанные сэмплы из абсолютного интервала [startAbs, endAbs). */
@@ -174,43 +184,24 @@
     return output;
   }
 
-  function encodeWav(samples, sampleRate) {
-    const buffer = new ArrayBuffer(44 + samples.length * 2);
-    const view = new DataView(buffer);
-
-    function writeString(offset, text) {
-      for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
+  /** Текущая шина AudioContext (создаётся в audio.js, второй контекст не нужен). */
+  function syncBus() {
+    const next = MR.audio.getBufferBus ? MR.audio.getBufferBus() : null;
+    if (next !== bus) {
+      stopScheduled();
+      bus = next;
+      if (bus) applyBufferVolume();
     }
-
-    writeString(0, "RIFF");
-    view.setUint32(4, 36 + samples.length * 2, true);
-    writeString(8, "WAVE");
-    writeString(12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeString(36, "data");
-    view.setUint32(40, samples.length * 2, true);
-
-    let offset = 44;
-    for (let i = 0; i < samples.length; i += 1) {
-      const value = utils.clamp(samples[i], -1, 1);
-      view.setInt16(offset, value < 0 ? value * 0x8000 : value * 0x7fff, true);
-      offset += 2;
-    }
-
-    return new Blob([view], { type: "audio/wav" });
+    return bus;
   }
 
   /**
-   * Строит сегмент WAV для абсолютного интервала. Возвращает фактические
-   * границы (они могут быть уже запрошенных, если старые чанки обрезаны).
+   * Строит сегмент для абсолютного интервала. Возвращает фактические границы
+   * (они могут быть уже запрошенных, если старые чанки обрезаны).
    */
   function buildSegment(startAbs, endAbs) {
+    if (!syncBus()) return null;
+
     const first = chunks.length ? chunks[0].start : 0;
     const from = Math.max(first, Math.floor(startAbs));
     const to = Math.min(totalSamples, Math.floor(endAbs));
@@ -219,340 +210,203 @@
     const samples = collectRange(from, to);
     if (!samples.length) return null;
 
+    let buffer;
+    try {
+      // Буфер сразу в 16 кГц: Web Audio ресемплирует его в частоту контекста.
+      buffer = bus.context.createBuffer(1, samples.length, TARGET_RATE);
+      buffer.getChannelData(0).set(samples);
+    } catch (error) {
+      return null;
+    }
+
     return {
-      blob: encodeWav(samples, TARGET_RATE),
+      buffer: buffer,
       start: from,
-      end: to,
+      end: from + samples.length,
     };
   }
 
   /* ------------------------------------------------------------------------
-     Элементы буфера
+     Планирование сегментов
      ------------------------------------------------------------------------ */
 
-  /**
-   * Буфер не проходит через GainNode живого эфира, поэтому громкость и mute
-   * выставляются прямо элементам.
-   */
+  function now() {
+    return bus ? bus.context.currentTime : 0;
+  }
+
+  /** Громкость/mute буфера: своя шина, живой GainNode не затрагивается. */
   function applyBufferVolume() {
+    if (!bus) return;
     const volume = Number(store.state.volume);
     const safe = Number.isFinite(volume) ? utils.clamp(volume, 0, 1) : 1;
     const value = store.state.muted ? 0 : safe;
-    if (activeEl) activeEl.volume = value;
-    if (spareEl) spareEl.volume = value;
-  }
-
-  function createPlayerElement() {
-    const el = new Audio();
-    el.preload = "auto";
-    el.addEventListener("timeupdate", function () { onTimeUpdate(el); });
-    el.addEventListener("ended", function () { onEnded(el); });
-    el.addEventListener("playing", function () { onPlaying(el); });
-    el.addEventListener("error", function () { onElementError(el); });
-    return el;
-  }
-
-  function ensurePlayers() {
-    if (!activeEl) activeEl = createPlayerElement();
-    if (!spareEl) spareEl = createPlayerElement();
-    applyBufferVolume();
-  }
-
-  /** Назначает элементу готовый сегмент (старый URL освобождается). */
-  function assignSegment(el, segment) {
-    if (el.__wavUrl) {
-      URL.revokeObjectURL(el.__wavUrl);
-      el.__wavUrl = "";
-    }
-
-    const url = URL.createObjectURL(segment.blob);
-    el.__wavUrl = url;
-    el.__wavStart = segment.start;
-    el.__wavEnd = segment.end;
-    el.src = url;
-    try { el.load(); } catch (error) { /* noop */ }
-    return true;
-  }
-
-  function releaseElement(el) {
-    if (!el) return;
-    try { el.pause(); } catch (error) { /* noop */ }
     try {
-      el.removeAttribute("src");
-      el.load();
-    } catch (error) { /* noop */ }
-    if (el.__wavUrl) {
-      URL.revokeObjectURL(el.__wavUrl);
-      el.__wavUrl = "";
+      bus.gain.gain.setTargetAtTime(value, bus.context.currentTime, 0.02);
+    } catch (error) {
+      bus.gain.gain.value = value;
     }
-    el.__wavStart = 0;
-    el.__wavEnd = 0;
   }
 
-  function clearPlaybackTimers() {
+  function stopScheduled() {
+    scheduled.forEach(function (item) {
+      try {
+        item.source.onended = null;
+        item.source.stop();
+      } catch (error) { /* источник уже остановлен */ }
+      try { item.source.disconnect(); } catch (error) { /* noop */ }
+    });
+    scheduled = [];
+  }
+
+  /** Ставит сегмент в график на абсолютное время контекста. */
+  function startSource(segment, startAt) {
+    if (!bus) return null;
+
+    const context = bus.context;
+    const source = context.createBufferSource();
+    source.buffer = segment.buffer;
+    source.connect(bus.gain);
+
+    const when = Math.max(startAt, context.currentTime + MIN_START_GAP);
+    try {
+      source.start(when);
+    } catch (error) {
+      try { source.disconnect(); } catch (disconnectError) { /* noop */ }
+      return null;
+    }
+
+    const item = {
+      source: source,
+      startAt: when,
+      startSample: segment.start,
+      endSample: segment.end,
+      duration: segment.buffer.duration,
+    };
+    source.onended = function () { onSourceEnded(item); };
+    scheduled.push(item);
+
+    lastEndSample = segment.end;
+    lastEndTime = when + segment.buffer.duration;
+    return item;
+  }
+
+  function clearTimers() {
     if (advanceTimer) {
       clearTimeout(advanceTimer);
       advanceTimer = null;
     }
-    if (chainTimer) {
-      clearTimeout(chainTimer);
-      chainTimer = null;
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
     }
   }
 
-  /** Полностью освобождает оба элемента и служебные таймеры. */
-  function resetPlayback() {
-    clearPlaybackTimers();
-
-    const oldActive = activeEl;
-    const oldSpare = spareEl;
-    const oldPending = pendingEl;
-
-    activeEl = null;
-    spareEl = null;
-    pendingEl = null;
-    segmentStart = 0;
-    segmentEnd = 0;
-    chainFailures = 0;
-    chainWaits = 0;
-    chainToken += 1;
-
-    releaseElement(oldActive);
-    if (oldSpare && oldSpare !== oldActive) releaseElement(oldSpare);
-    if (oldPending && oldPending !== oldActive && oldPending !== oldSpare) {
-      releaseElement(oldPending);
+  function armAdvance() {
+    if (advanceTimer) {
+      clearTimeout(advanceTimer);
+      advanceTimer = null;
     }
+    if (!buffered || bufferPaused || !scheduled.length) return;
+
+    const delay = Math.max(0, (lastEndTime - PREBUILD_LEAD - now()) * 1000);
+    advanceTimer = setTimeout(function () {
+      advanceTimer = null;
+      scheduleNextSegment();
+    }, delay);
+  }
+
+  function scheduleRetry() {
+    if (retryTimer) return;
+    retryTimer = setTimeout(function () {
+      retryTimer = null;
+      if (!buffered || bufferPaused) return;
+
+      // Эфир переподключается — запись ещё не растёт, но буфер не бросаем.
+      if (!store.state.playback.isPlaying) {
+        scheduleRetry();
+        return;
+      }
+
+      chainWaits += 1;
+      if (chainWaits > MAX_CHAIN_WAITS) {
+        // Запись давно не растёт — нет смысла держать эфир заглушённым.
+        returnLive();
+        return;
+      }
+      scheduleNextSegment();
+    }, CHAIN_RETRY_MS);
+  }
+
+  /**
+   * Заранее строит продолжение от абсолютной позиции конца последнего
+   * сегмента до актуальной границы записи и ставит его ровно на стык.
+   */
+  function scheduleNextSegment() {
+    if (!buffered || bufferPaused) return;
+    if (!syncBus()) return;
+
+    const from = lastEndSample;
+    const to = totalSamples;
+    if (to <= from) {
+      scheduleRetry();
+      return;
+    }
+
+    const segment = buildSegment(from, to);
+    if (!segment) {
+      scheduleRetry();
+      return;
+    }
+
+    let startAt = lastEndTime;
+    if (!Number.isFinite(startAt) || startAt < now() + MIN_START_GAP) {
+      // Не успели поставить заранее — минимальный запас, но без пропуска
+      // записанных сэмплов: продолжаем ровно с from.
+      startAt = now() + START_LEAD;
+    }
+
+    if (!startSource(segment, startAt)) {
+      scheduleRetry();
+      return;
+    }
+
+    chainWaits = 0;
+    armAdvance();
+  }
+
+  function onSourceEnded(item) {
+    const index = scheduled.indexOf(item);
+    if (index !== -1) scheduled.splice(index, 1);
+    try { item.source.disconnect(); } catch (error) { /* noop */ }
+
+    if (scheduled.length) return;
+
+    // Все запланированные сегменты доиграны: фиксируем позицию и пробуем
+    // продолжить, если запись уже успела продвинуться.
+    cursor = item.endSample;
+    if (buffered && !bufferPaused) scheduleNextSegment();
   }
 
   /* ------------------------------------------------------------------------
      Позиция прослушивания
      ------------------------------------------------------------------------ */
 
-  /** Абсолютная позиция активного сегмента по currentTime элемента. */
-  function positionOfActive() {
-    if (!buffered || !activeEl) return cursor;
-    const time = Number(activeEl.currentTime);
-    if (!Number.isFinite(time) || time <= 0) return cursor;
-    return Math.min(segmentEnd, segmentStart + Math.round(time * TARGET_RATE));
-  }
+  function currentPosition() {
+    if (!buffered || !scheduled.length) return cursor;
 
-  /* ------------------------------------------------------------------------
-     Непрерывная лента: подготовка и переключение сегментов
-     ------------------------------------------------------------------------ */
-
-  /** Таймер у конца текущего сегмента: готовим следующий WAV заранее. */
-  function armAdvance() {
-    if (advanceTimer) {
-      clearTimeout(advanceTimer);
-      advanceTimer = null;
-    }
-    if (!buffered || bufferPaused || !activeEl) return;
-
-    const duration = Math.max(0, segmentEnd - segmentStart) / TARGET_RATE;
-    const position = Number(activeEl.currentTime) || 0;
-    const delay = Math.max(0, (duration - PREBUILD_LEAD - position) * 1000);
-
-    advanceTimer = setTimeout(function () {
-      advanceTimer = null;
-      requestNextSegment();
-    }, delay);
-  }
-
-  function scheduleChainRetry() {
-    if (chainTimer) return;
-    chainTimer = setTimeout(function () {
-      chainTimer = null;
-      if (!buffered || bufferPaused || pendingEl) return;
-      if (!store.state.playback.isPlaying) return;
-
-      if (activeEl && !activeEl.ended) {
-        // Сегмент ещё звучит — просто ждём данных для предзагрузки.
-        requestNextSegment();
-        return;
+    const time = now();
+    for (let i = 0; i < scheduled.length; i += 1) {
+      const item = scheduled[i];
+      const end = item.startAt + item.duration;
+      if (time < item.startAt) return item.startSample;
+      if (time < end) {
+        const played = Math.round((time - item.startAt) * TARGET_RATE);
+        return Math.min(item.endSample, item.startSample + played);
       }
-      startNextSegment();
-    }, CHAIN_RETRY_MS);
-  }
-
-  /**
-   * Заранее строит следующий сегмент от абсолютной позиции конца текущего до
-   * актуальной границы записи. Если новых сэмплов ещё нет — короткий таймер.
-   */
-  function requestNextSegment() {
-    if (!buffered || bufferPaused || pendingEl || !isEnabled()) return;
-    if (!store.state.playback.isPlaying) return;
-
-    const from = segmentEnd;
-    const ready = Boolean(
-      spareEl && spareEl.__wavUrl &&
-      spareEl.__wavStart === from && spareEl.__wavEnd > from
-    );
-
-    if (!ready) {
-      const to = totalSamples;
-      if (to <= from) {
-        chainWaits += 1;
-        if (chainWaits > MAX_CHAIN_WAITS) {
-          // Запись давно не растёт — нет смысла держать эфир заглушённым.
-          returnLive();
-          return;
-        }
-        scheduleChainRetry();
-        return;
-      }
-
-      ensurePlayers();
-      const segment = buildSegment(from, to);
-      if (!segment) {
-        scheduleChainRetry();
-        return;
-      }
-      assignSegment(spareEl, segment);
     }
 
-    chainWaits = 0;
-
-    // Сегмент уже доигран (ждём только данных) — запускаем сразу.
-    if (activeEl && activeEl.ended) startNextSegment();
-  }
-
-  /** Запускает следующий сегмент, не возвращаясь в живой эфир. */
-  function startNextSegment() {
-    if (!buffered || bufferPaused || pendingEl || !isEnabled()) return;
-    if (!store.state.playback.isPlaying) return;
-
-    const from = segmentEnd;
-    let candidate = null;
-
-    if (spareEl && spareEl.__wavUrl &&
-        spareEl.__wavStart === from && spareEl.__wavEnd > from) {
-      candidate = spareEl;
-    } else {
-      const to = totalSamples;
-      if (to <= from) {
-        chainWaits += 1;
-        if (chainWaits > MAX_CHAIN_WAITS) {
-          returnLive();
-          return;
-        }
-        scheduleChainRetry();
-        return;
-      }
-      ensurePlayers();
-      const segment = buildSegment(from, to);
-      if (!segment) {
-        scheduleChainRetry();
-        return;
-      }
-      assignSegment(spareEl, segment);
-      candidate = spareEl;
-    }
-
-    pendingEl = candidate;
-    applyBufferVolume();
-
-    try { candidate.currentTime = 0; } catch (error) { /* noop */ }
-
-    // Токен защищает от позднего reject предыдущей попытки, когда элемент уже
-    // участвует в новом переключении.
-    chainToken += 1;
-    const token = chainToken;
-    const promise = candidate.play();
-    if (promise && typeof promise.catch === "function") {
-      promise.catch(function () {
-        if (token !== chainToken) return;
-        onChainFailure(candidate);
-      });
-    }
-  }
-
-  /** Новый сегмент зазвучал: только теперь освобождаем предыдущий. */
-  function activate(el) {
-    if (!buffered || el !== pendingEl) return;
-
-    const old = activeEl;
-    pendingEl = null;
-    activeEl = el;
-    segmentStart = el.__wavStart;
-    segmentEnd = el.__wavEnd;
-    cursor = segmentStart;
-    chainFailures = 0;
-    chainWaits = 0;
-
-    // Старый сегмент отпускаем после старта нового — без наложения двух WAV.
-    spareEl = old;
-    releaseElement(old);
-
-    applyBufferVolume();
-    armAdvance();
-    emit();
-  }
-
-  function maybeActivate(el) {
-    if (!buffered || el !== pendingEl) return;
-    if (el.paused || el.ended) return;
-    activate(el);
-  }
-
-  function onChainFailure(el) {
-    if (el !== pendingEl) return;
-    pendingEl = null;
-    releaseElement(el);
-    chainFailures += 1;
-    if (chainFailures > MAX_CHAIN_FAILURES) {
-      returnLive();
-      return;
-    }
-    scheduleChainRetry();
-  }
-
-  function onTimeUpdate(el) {
-    if (el === pendingEl) {
-      maybeActivate(el);
-      if (el !== activeEl) return;
-    }
-    if (!buffered || el !== activeEl) return;
-
-    cursor = positionOfActive();
-    if (bufferPaused) return;
-
-    const duration = Math.max(0, segmentEnd - segmentStart) / TARGET_RATE;
-    const position = Number(el.currentTime) || 0;
-    if (duration - position <= PREBUILD_LEAD) requestNextSegment();
-  }
-
-  function onEnded(el) {
-    if (!buffered || el !== activeEl) return;
-    cursor = segmentEnd;
-    if (bufferPaused || !store.state.playback.isPlaying) return;
-
-    if (advanceTimer) {
-      clearTimeout(advanceTimer);
-      advanceTimer = null;
-    }
-    // Не возвращаемся в эфир: продолжаем ленту со следующего сегмента.
-    startNextSegment();
-  }
-
-  function onPlaying(el) {
-    if (el === pendingEl) {
-      activate(el);
-      return;
-    }
-    if (el !== activeEl) return;
-    if (!buffered || bufferPaused) return;
-    armAdvance();
-  }
-
-  function onElementError(el) {
-    if (!buffered) return;
-    if (el === pendingEl) {
-      onChainFailure(el);
-      return;
-    }
-    if (el !== activeEl) return;
-    // Текущий сегмент не читается — дальше продолжать нечем.
-    returnLive();
+    const last = scheduled[scheduled.length - 1];
+    return last.endSample;
   }
 
   /* ------------------------------------------------------------------------
@@ -560,11 +414,12 @@
      ------------------------------------------------------------------------ */
 
   /**
-   * Готовит WAV с выбранной позиции и назначает его активному элементу,
-   * но не запускает воспроизведение. Живой эфир при этом глушится.
+   * Готовит буфер с выбранной позиции, но не запускает его. Живой эфир при
+   * этом глушится, данные и позиция остаются в памяти.
    */
   function prepare(secondsBack) {
     if (!isEnabled()) return false;
+    if (!syncBus()) return false;
 
     const available = availableSeconds();
     if (available < 2) return false;
@@ -580,16 +435,17 @@
     const segment = buildSegment(startSample, totalSamples);
     if (!segment) return false;
 
-    resetPlayback();
-    ensurePlayers();
-    if (!assignSegment(activeEl, segment)) return false;
+    clearTimers();
+    stopScheduled();
 
-    segmentStart = segment.start;
-    segmentEnd = segment.end;
-    cursor = segmentStart;
+    cursor = segment.start;
+    lastEndSample = segment.start;
+    lastEndTime = 0;
+    pendingSegment = segment;
     buffered = true;
     // На паузе эфира буфер только готовится: звук продолжит Play.
     bufferPaused = !store.state.playback.isPlaying;
+    chainWaits = 0;
 
     // Живой эфир не ставим на паузу — только глушим, чтобы буфер продолжал
     // писаться, а в плеере не появлялось состояние «Пауза».
@@ -600,38 +456,32 @@
     return true;
   }
 
-  /** Запускает уже подготовленный (или приостановленный) буфер. */
+  /** Запускает подготовленный (или приостановленный) буфер. */
   function startBuffer() {
-    if (!isEnabled() || !buffered || !activeEl) return false;
+    if (!isEnabled() || !buffered) return false;
+    if (!syncBus()) return false;
 
+    bufferPaused = false;
     applyBufferVolume();
 
-    if (!activeEl.paused && !activeEl.ended) {
-      bufferPaused = false;
+    if (scheduled.length) {
       armAdvance();
       emit();
       return true;
     }
 
-    if (activeEl.ended) {
-      // Сегмент доигран — продолжаем ленту с абсолютной позиции.
-      bufferPaused = false;
-      startNextSegment();
-      emit();
-      return buffered;
+    let segment = pendingSegment;
+    pendingSegment = null;
+    if (!segment) {
+      const first = chunks.length ? chunks[0].start : 0;
+      segment = buildSegment(Math.max(cursor, first), totalSamples);
+      if (!segment) return false;
     }
 
-    bufferPaused = false;
-    const el = activeEl;
-    const promise = el.play();
-    if (promise && typeof promise.catch === "function") {
-      promise.catch(function () {
-        // Автозапуск запрещён или источник недоступен: возвращаемся к эфиру,
-        // данные буфера при этом остаются в памяти.
-        if (buffered && activeEl === el) returnLive();
-      });
-    }
+    if (!startSource(segment, now() + START_LEAD)) return false;
 
+    cursor = segment.start;
+    armAdvance();
     emit();
     return true;
   }
@@ -659,34 +509,35 @@
 
   function pauseBuffer() {
     if (!buffered) return false;
+
     bufferPaused = true;
-    clearPlaybackTimers();
-
-    // Незавершённое переключение отменяем: продолжение — по Play, с той же
-    // абсолютной позиции (данные за паузу никуда не денутся).
-    if (pendingEl) {
-      const pending = pendingEl;
-      pendingEl = null;
-      releaseElement(pending);
-    }
-
-    cursor = positionOfActive();
-    if (activeEl) {
-      try { activeEl.pause(); } catch (error) { /* noop */ }
-    }
+    cursor = currentPosition();
+    clearTimers();
+    stopScheduled();
+    pendingSegment = null;
     emit();
     return true;
   }
 
   function isBufferPlaying() {
-    return Boolean(buffered && !bufferPaused && activeEl && !activeEl.paused && !activeEl.ended);
+    return Boolean(buffered && !bufferPaused && scheduled.length > 0);
   }
 
   function stopBuffer() {
-    resetPlayback();
+    clearTimers();
+    stopScheduled();
+
+    pendingSegment = null;
     buffered = false;
     bufferPaused = false;
     cursor = 0;
+    lastEndSample = 0;
+    lastEndTime = 0;
+    chainWaits = 0;
+
+    if (bus) {
+      try { bus.gain.gain.value = 0; } catch (error) { /* noop */ }
+    }
 
     // Возвращаем звук живого эфира (он всё это время продолжал играть беззвучно).
     MR.audio.setBufferSilent(false);
@@ -705,6 +556,23 @@
     stopBuffer();
     activeStationId = null;
     emit();
+  }
+
+  /**
+   * Пока звучит буфер, транзиентная буферизация беззвучного эфира не должна
+   * выглядеть как прерывание: пользователь слушает запись, а не поток.
+   */
+  function quietLiveBuffering(playback) {
+    if (suppressStatus || !buffered || bufferPaused) return;
+    if (playback.status !== "buffering" || !playback.isPlaying) return;
+    if (!scheduled.length) return;
+
+    suppressStatus = true;
+    try {
+      store.setPlayback({ status: "playing" });
+    } finally {
+      suppressStatus = false;
+    }
   }
 
   function onPlayback(payload) {
@@ -739,13 +607,14 @@
       // Временные статусы живого потока (connecting/buffering/error) не должны
       // выбивать из буфера: эфир заглушён, запись продолжается.
       MR.audio.setBufferSilent(true);
+      quietLiveBuffering(playback);
+
       if (playback.isPlaying) {
         ensureTap();
         if (bufferPaused) {
           resumeBuffer();
-        } else if (activeEl && activeEl.ended && !pendingEl) {
-          // Пока эфир переподключался, сегмент доиграл — продолжаем ленту.
-          startNextSegment();
+        } else if (!scheduled.length) {
+          scheduleNextSegment();
         }
       }
       return;
@@ -777,16 +646,16 @@
     trimChunks();
 
     const available = availableSeconds();
-    const position = positionOfActive();
+    const position = currentPosition();
     const first = chunks.length ? chunks[0].start : 0;
 
-    if (buffered && (position < first || segmentEnd <= first)) {
+    if (buffered && (position < first || lastEndSample <= first)) {
       // Буфер сократили — выбранная позиция стала недоступна.
       returnLive();
       return;
     }
 
-    if (buffered && (totalSamples - position) / TARGET_RATE > Math.max(1, available - 0.3)) {
+    if (buffered && (totalSamples - position) / TARGET_RATE > Math.max(1, available - 0.3) + 0.001) {
       // Окно сузилось настолько, что записанные для буфера секунды обрезаны.
       returnLive();
       return;
@@ -817,8 +686,7 @@
     if (emitTimer) clearInterval(emitTimer);
     emitTimer = null;
     reset();
-    activeEl = null;
-    spareEl = null;
+    bus = null;
   }
 
   MR.timemachine = {
@@ -833,7 +701,7 @@
     returnLive: returnLive,
     getRewind: function () {
       if (!buffered) return 0;
-      const position = positionOfActive();
+      const position = currentPosition();
       cursor = position;
       return Math.max(0, (totalSamples - position) / TARGET_RATE);
     },
