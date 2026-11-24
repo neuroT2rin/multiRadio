@@ -1227,6 +1227,80 @@ async function main() {
   })()`);
   await screenshot("mobile-stats.png");
   await evaluate(`MR.modal.close('#modal-stats')`);
+  // На мобильной ширине подвал — колонка: ссылка не должна давать горизонтальный скролл.
+  await evaluate(`window.scrollTo(0, document.documentElement.scrollHeight)`);
+  await sleep(300);
+  results.footerGitHubMobile = await evaluate(`(() => {
+    const link = document.querySelector('.app-footer .footer-link');
+    const rect = link.getBoundingClientRect();
+    return {
+      visible: rect.width > 0 && rect.height > 0,
+      insideViewport: rect.left >= -1 && rect.right <= window.innerWidth + 1,
+      noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+      column: getComputedStyle(document.querySelector('.footer-inner')).flexDirection === 'column',
+      uptimeVisible: document.querySelector('#uptime').getBoundingClientRect().height > 0,
+    };
+  })()`);
+  await screenshot("footer-mobile.png");
+
+  // Десктоп: атрибуты ссылки, подпись и uptime по краям, space-between не сломан.
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false,
+  });
+  await sleep(300);
+  results.footerGitHub = await evaluate(`(() => {
+    const link = document.querySelector('.app-footer .footer-link');
+    if (!link) return { exists: false };
+    const rect = link.getBoundingClientRect();
+    const style = getComputedStyle(link);
+    const icon = link.querySelector('svg');
+    const iconRect = icon ? icon.getBoundingClientRect() : null;
+    return {
+      exists: true,
+      href: link.getAttribute('href'),
+      target: link.getAttribute('target'),
+      rel: link.getAttribute('rel'),
+      ariaLabel: link.getAttribute('aria-label'),
+      title: link.getAttribute('title'),
+      label: link.textContent.trim(),
+      icon: Boolean(icon),
+      iconAriaHidden: icon ? icon.getAttribute('aria-hidden') : null,
+      iconSize: iconRect ? [Math.round(iconRect.width), Math.round(iconRect.height)] : null,
+      visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden',
+      color: style.color,
+      justifyContent: getComputedStyle(document.querySelector('.footer-inner')).justifyContent,
+      uptime: Boolean(document.querySelector('#uptime')),
+    };
+  })()`);
+  await evaluate(`window.scrollTo(0, document.documentElement.scrollHeight)`);
+  await sleep(300);
+  results.footerGitHubDesktop = await evaluate(`(() => {
+    const inner = document.querySelector('.footer-inner');
+    const link = document.querySelector('.app-footer .footer-link');
+    const rect = link.getBoundingClientRect();
+    const innerRect = inner.getBoundingClientRect();
+    return {
+      visible: rect.width > 0 && rect.height > 0,
+      insideFooter: rect.left >= innerRect.left - 1 && rect.right <= innerRect.right + 1,
+      noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+      justifyContent: getComputedStyle(inner).justifyContent,
+    };
+  })()`);
+  await screenshot("footer-desktop.png");
+
+  // Светлая тема: ссылка и иконка читаемы, цвет берётся из токена.
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
+  await sleep(300);
+  await screenshot("footer-light.png");
+  results.footerGitHubLight = await evaluate(`(() => {
+    const link = document.querySelector('.app-footer .footer-link');
+    return {
+      theme: document.documentElement.dataset.theme,
+      visible: link.getBoundingClientRect().width > 0,
+      color: getComputedStyle(link).color,
+    };
+  })()`);
+  await evaluate(`document.querySelector('#theme-toggle').click()`);
 
   results.consoleErrors = consoleErrors;
   results.exceptions = exceptions;
