@@ -15,7 +15,7 @@
   const MR = (global.MR = global.MR || {});
   const utils = MR.utils;
 
-  const MODES = ["spectrum", "aurora", "orbit", "tunnel", "spiral"];
+  const MODES = ["spectrum", "aurora", "orbit", "tunnel", "spiral", "voice"];
   const PARTICLE_COUNT = 64;
   const STAR_COUNT = 90;
 
@@ -34,9 +34,22 @@
   const TUNNEL_NEAR = 120;
   const TUNNEL_FOCAL = 780;
 
+  /** «Голос»: число точек осциллограммы и оттенки трёх формантных полос. */
+  const VOICE_POINTS = 128;
+  const VOICE_HUES = [176, 198, 262];
+
   let tunnelProgress = 0;
   let tunnelLastAt = 0;
   let tunnelCamera = 0;
+
+  let voiceWave = null;
+  let voiceLevel = 0;
+  const voiceBands = [0, 0, 0];
+  let voiceLastAt = 0;
+  let voiceGlow = null;
+  let voiceStroke = null;
+  let voiceGradWidth = 0;
+  let voiceGradHeight = 0;
 
   let canvas = null;
   let ctx = null;
@@ -665,6 +678,217 @@
     ctx.fillRect(0, 0, width, height);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* «Голос» — спокойная визуализация речи.                              */
+  /* Три форманты (200–800, 800–2000, 2000–4500 Гц) ведут светящиеся дуги, */
+  /* а по центру живёт сглаженная осциллограмма из analysis.wave.         */
+  /* ------------------------------------------------------------------ */
+
+  /** Речь тише музыки: мягкая гамма и усиление, чтобы полосы дышали. */
+  function voiceShape(value) {
+    return utils.clamp(Math.pow(utils.clamp(value, 0, 1), 0.7) * 1.35, 0, 1);
+  }
+
+  /** Экспоненциальное сглаживание, не зависящее от частоты кадров. */
+  function voiceEase(current, target, dt, attack, release) {
+    const tau = target > current ? attack : release;
+    return current + (target - current) * (1 - Math.exp(-dt / tau));
+  }
+
+  /** Средняя энергия спектра в речевой полосе, Гц (лог-шкала анализатора). */
+  function voiceSpectrumBand(values, fromHz, toHz) {
+    if (!values || !values.length) return 0;
+    const steps = values.length;
+    const minLog = Math.log(30);
+    const maxLog = Math.log(16000);
+    const from = utils.clamp(
+      Math.floor((steps * (Math.log(fromHz) - minLog)) / (maxLog - minLog)),
+      0,
+      steps - 1
+    );
+    const to = utils.clamp(
+      Math.ceil((steps * (Math.log(toHz) - minLog)) / (maxLog - minLog)),
+      from + 1,
+      steps
+    );
+    let sum = 0;
+    for (let i = from; i < to; i += 1) sum += values[i];
+    return sum / (to - from);
+  }
+
+  function buildVoice() {
+    voiceWave = new Float32Array(VOICE_POINTS);
+    voiceBands[0] = 0;
+    voiceBands[1] = 0;
+    voiceBands[2] = 0;
+    voiceLevel = 0;
+    voiceLastAt = 0;
+    voiceGlow = null;
+    voiceStroke = null;
+    voiceGradWidth = 0;
+    voiceGradHeight = 0;
+  }
+
+  /** Градиенты зависят только от размеров — обновляем их при resize, не в кадре. */
+  function ensureVoiceGradients() {
+    if (!voiceWave) buildVoice();
+    if (voiceGlow && voiceGradWidth === width && voiceGradHeight === height) return;
+
+    const cx = width / 2;
+    const cy = height * 0.5;
+    const base = Math.min(width, height);
+    const halfSpan = Math.min(width * 0.39, base * 0.56);
+
+    voiceGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(140, base * 0.66));
+    voiceGlow.addColorStop(0, hsla(184, 86, 64, 0.2));
+    voiceGlow.addColorStop(0.45, hsla(222, 82, 58, 0.08));
+    voiceGlow.addColorStop(1, hsla(262, 80, 52, 0));
+
+    voiceStroke = ctx.createLinearGradient(cx - halfSpan, 0, cx + halfSpan, 0);
+    voiceStroke.addColorStop(0, hsla(170, 92, 64, 1));
+    voiceStroke.addColorStop(0.5, hsla(192, 94, 72, 1));
+    voiceStroke.addColorStop(1, hsla(266, 92, 74, 1));
+
+    voiceGradWidth = width;
+    voiceGradHeight = height;
+  }
+
+  /** Верхняя и нижняя дуги эллипса с разрывами по бокам — «формантные ленты». */
+  function traceVoiceArcs(cx, cy, rx, ry, gap) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, Math.PI + gap, Math.PI * 2 - gap);
+    ctx.moveTo(cx + Math.cos(gap) * rx, cy + Math.sin(gap) * ry);
+    ctx.ellipse(cx, cy, rx, ry, 0, gap, Math.PI - gap);
+  }
+
+  /** Осциллограмма: фиксированные 128 точек, без аллокаций в каждом кадре. */
+  function traceVoiceWave(x0, cy, stepX, amplitude, idleSine, now) {
+    ctx.beginPath();
+    for (let i = 0; i < VOICE_POINTS; i += 1) {
+      const drift = idleSine ? Math.sin(i * 0.16 + now * 0.0012) * idleSine : 0;
+      const y = cy + voiceWave[i] * amplitude + drift;
+      if (i === 0) ctx.moveTo(x0, y);
+      else ctx.lineTo(x0 + i * stepX, y);
+    }
+  }
+
+  function drawVoice(analysis, now, hue, energy, idle) {
+    ensureVoiceGradients();
+
+    const cx = width / 2;
+    const cy = height * 0.5;
+    const base = Math.min(width, height);
+    const halfSpan = Math.min(width * 0.39, base * 0.56);
+    const dt = voiceLastAt ? utils.clamp(now - voiceLastAt, 0, 120) / 1000 : 0.016;
+    voiceLastAt = now;
+
+    const spectrum = !idle && analysis && analysis.spectrum ? analysis.spectrum : null;
+    let targetLow = 0;
+    let targetMid = 0;
+    let targetHigh = 0;
+    let targetLevel = 0;
+
+    if (spectrum) {
+      targetLow = voiceShape(voiceSpectrumBand(spectrum, 200, 800));
+      targetMid = voiceShape(voiceSpectrumBand(spectrum, 800, 2000));
+      targetHigh = voiceShape(voiceSpectrumBand(spectrum, 2000, 4500));
+      targetLevel = voiceShape(voiceSpectrumBand(spectrum, 200, 4000));
+    }
+
+    voiceBands[0] = voiceEase(voiceBands[0], targetLow, dt, 0.05, 0.22);
+    voiceBands[1] = voiceEase(voiceBands[1], targetMid, dt, 0.05, 0.26);
+    voiceBands[2] = voiceEase(voiceBands[2], targetHigh, dt, 0.04, 0.3);
+    voiceLevel = voiceEase(voiceLevel, targetLevel, dt, 0.05, 0.26);
+
+    const breath = 0.5 + 0.5 * Math.sin(now * 0.0009);
+
+    // Дымка вокруг центра: в тишине «дышит» вместо пустого экрана.
+    ctx.save();
+    ctx.fillStyle = voiceGlow;
+    ctx.globalAlpha = idle
+      ? 0.22 + breath * 0.22
+      : 0.34 + voiceLevel * 0.42 + utils.clamp(energy, 0, 1) * 0.12;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+
+    // Осевая линия, к которой возвращается волна в паузах.
+    ctx.save();
+    ctx.strokeStyle = hsla(hue, 82, 66, idle ? 0.1 + breath * 0.05 : 0.1 + voiceLevel * 0.12);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - halfSpan, cy);
+    ctx.lineTo(cx + halfSpan, cy);
+    ctx.stroke();
+    ctx.restore();
+
+    // Осциллограмма: обновляем точки один раз за кадр, паузы гасим плавно.
+    const source = !idle && analysis && analysis.wave ? analysis.wave : null;
+    const waveLength = source ? source.length : 0;
+
+    for (let i = 0; i < VOICE_POINTS; i += 1) {
+      let target = 0;
+      if (waveLength > 1) {
+        const index = Math.round((i / (VOICE_POINTS - 1)) * (waveLength - 1));
+        target = (source[index] - 128) / 128;
+      }
+      voiceWave[i] = voiceEase(voiceWave[i], target, dt, 0.035, 0.16);
+    }
+
+    const amplitude = base * 0.115 * (idle ? 0.12 : 0.55 + voiceLevel * 0.85);
+    const idleSine = idle ? base * 0.0045 : 0;
+    const stepX = (halfSpan * 2) / (VOICE_POINTS - 1);
+    const x0 = cx - halfSpan;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // Заливка под волной — мягкое «тело» голоса.
+    traceVoiceWave(x0, cy, stepX, amplitude, idleSine, now);
+    ctx.lineTo(x0 + halfSpan * 2, cy);
+    ctx.lineTo(x0, cy);
+    ctx.closePath();
+    ctx.fillStyle = hsla(hue + 28, 86, 66, idle ? 0.03 : 0.05 + voiceLevel * 0.05);
+    ctx.fill();
+
+    // Формантные дуги: внешняя — высокая полоса, внутренняя — низкая.
+    for (let band = 2; band >= 0; band -= 1) {
+      const value = voiceBands[band];
+      const rx = base * (0.245 + band * 0.105) * (1 + value * 0.035) +
+        (idle ? base * 0.006 * breath : 0);
+      const ry = rx * (0.5 + band * 0.02);
+      const gap = 0.16 + band * 0.04 + (idle ? 0 : (1 - value) * 0.05) +
+        Math.sin(now * 0.00022 + band * 1.7) * 0.025;
+      const alpha = idle ? 0.05 + breath * 0.05 : 0.1 + value * 0.55;
+      const lineWidth = 0.9 + value * 3.4;
+
+      traceVoiceArcs(cx, cy, rx, ry, gap);
+      ctx.strokeStyle = hsla(VOICE_HUES[band], 92, 64, alpha * 0.32);
+      ctx.lineWidth = lineWidth * 6;
+      ctx.stroke();
+
+      traceVoiceArcs(cx, cy, rx, ry, gap);
+      ctx.strokeStyle = hsla(VOICE_HUES[band], 95, 74, alpha);
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+    }
+
+    // Свечение и чистая линия осциллограммы.
+    traceVoiceWave(x0, cy, stepX, amplitude, idleSine, now);
+    ctx.strokeStyle = hsla(hue + 12, 90, 66, idle ? 0.08 : 0.1 + voiceLevel * 0.16);
+    ctx.lineWidth = 7;
+    ctx.stroke();
+
+    traceVoiceWave(x0, cy, stepX, amplitude, idleSine, now);
+    ctx.globalAlpha = idle ? 0.32 + breath * 0.22 : 0.55 + voiceLevel * 0.45;
+    ctx.strokeStyle = voiceStroke;
+    ctx.lineWidth = 1.7;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
   function drawSpiral(analysis, now, hue, energy, idle) {
     const cx = width / 2;
     const cy = height * 0.5;
@@ -769,6 +993,8 @@
       drawTunnel(analysis, now, hue, energy, idle);
     } else if (mode === "spiral") {
       drawSpiral(analysis, now, hue, energy, idle);
+    } else if (mode === "voice") {
+      drawVoice(analysis, now, hue, energy, idle);
     } else {
       drawSpectrum(analysis, now, hue, energy, idle);
     }
@@ -791,6 +1017,7 @@
     buildParticles();
     buildStars();
     buildOrbiters();
+    buildVoice();
     resize();
 
     global.addEventListener("resize", utils.debounce(resize, 160));

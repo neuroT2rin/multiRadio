@@ -102,6 +102,9 @@
             <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="ui:mode" data-mode="spiral">
               <span class="nav-item__ico" aria-hidden="true">🌀</span> Спираль
             </button>
+            <button class="nav-item" type="button" role="menuitemradio" aria-checked="false" data-command="ui:mode" data-mode="voice">
+              <span class="nav-item__ico" aria-hidden="true">🎙</span> Голос
+            </button>
             <div class="nav-divider"></div>
             <p class="nav-menu__label">Визуализация потока</p>
             <button class="nav-item" type="button" role="menuitemradio" aria-checked="true" data-command="ui:mini-mode" data-mini-mode="wave">
@@ -565,7 +568,7 @@
           <label class="settings-row" for="setting-mode">
             <span class="settings-row__text">
               <span class="settings-row__title">Режим визуализации</span>
-              <span class="settings-row__hint">Круговой спектр, аврора, орбиты, туннель или спираль.</span>
+              <span class="settings-row__hint">Круговой спектр, аврора, орбиты, туннель, спираль или голос.</span>
             </span>
             <select class="input input--compact" id="setting-mode">
               <option value="spectrum">Круговой спектр</option>
@@ -573,6 +576,7 @@
               <option value="orbit">Орбиты</option>
               <option value="tunnel">Туннель</option>
               <option value="spiral">Спираль</option>
+              <option value="voice">Голос</option>
             </select>
           </label>
           <label class="settings-row" for="setting-compat">

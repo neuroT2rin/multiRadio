@@ -407,6 +407,37 @@ async function main() {
     };
   })()`);
 
+  // Режим «Голос»: пункт меню, aria-checked, отрисовка (не пустой canvas).
+  results.voiceMode = await evaluate(`(() => {
+    const item = document.querySelector('.nav-item[data-command="ui:mode"][data-mode="voice"]');
+    item.click();
+
+    const fake = {
+      active: true, silent: false, level: 0.45, bass: 0.2, mid: 0.55, treble: 0.4, beat: false,
+      spectrum: Array.from({ length: 64 }, (_, i) => 0.15 + 0.55 * Math.abs(Math.sin(i * 0.5 + 0.7))),
+      wave: new Uint8Array(1024).fill(128).map((_, i) => 128 + Math.round(46 * Math.sin(i * 0.09))),
+    };
+    const canvas = document.querySelector('#bg-canvas');
+    const ctx = canvas.getContext('2d');
+    MR.bg.draw(fake, 16, performance.now());
+
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let pixels = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] > 0) pixels += 1;
+
+    return {
+      checked: item.getAttribute('aria-checked'),
+      checkedCount: document.querySelectorAll('.nav-item[data-command="ui:mode"][aria-checked="true"]').length,
+      state: MR.store.state.ui.mode,
+      mode: MR.bg.mode,
+      pixels: pixels,
+      canvas: [canvas.width, canvas.height],
+      empty: pixels === 0,
+    };
+  })()`);
+  await screenshot("voice.png");
+  await evaluate(`document.querySelector('.nav-item[data-command="ui:mode"][data-mode="spectrum"]').click()`);
+
   // Режим визуализации: страница скрыта, остаются «Вид» и «Визуализация».
   results.vizMode = await evaluate(`(() => {
     const toggle = document.querySelector('#viz-toggle');
