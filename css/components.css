@@ -810,81 +810,6 @@ body.modal-open {
   color: var(--text-dim);
 }
 
-/* --------------------------------------------------------------------------
-   Полноэкранный приём JSON-настроек
-   -------------------------------------------------------------------------- */
-
-body.is-file-dragging {
-  cursor: copy;
-}
-
-.drop-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 800;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  pointer-events: none;
-  background: rgba(2, 5, 12, 0.62);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  animation: fade-in 0.18s var(--ease);
-}
-
-.drop-overlay__panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: min(92vw, 520px);
-  padding: 36px 28px;
-  text-align: center;
-  background: rgba(9, 16, 28, 0.82);
-  border: 2px dashed var(--accent);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-}
-
-.drop-overlay__icon {
-  font-size: 3.4rem;
-  line-height: 1;
-}
-
-.drop-overlay__title {
-  margin: 0;
-  font-size: 1.12rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-
-.drop-overlay__hint {
-  margin: 0;
-  max-width: 36ch;
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: var(--text-muted);
-}
-
-@media (max-width: 520px) {
-  .drop-overlay {
-    padding: 16px;
-  }
-
-  .drop-overlay__panel {
-    padding: 28px 20px;
-  }
-
-  .drop-overlay__icon {
-    font-size: 2.8rem;
-  }
-
-  .drop-overlay__title {
-    font-size: 1rem;
-  }
-}
-
 .import-warning {
   margin-bottom: 12px;
   padding: 10px 12px;
@@ -1586,13 +1511,4 @@ html[data-theme="light"] .settings-row:hover {
 
 html[data-theme="light"] .import-drop {
   background: rgba(255, 255, 255, 0.6);
-}
-
-html[data-theme="light"] .drop-overlay {
-  background: rgba(15, 28, 48, 0.34);
-}
-
-html[data-theme="light"] .drop-overlay__panel {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: var(--accent);
 }
