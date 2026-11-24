@@ -27,10 +27,16 @@
     [150, 164, 178, 194, 208],
     [36, 46, 26, 318, 288],
   ];
-  const TUNNEL_CURVES = 9;
+  const TUNNEL_RINGS = 24;
+  const TUNNEL_SEGMENTS = 44;
+  const TUNNEL_RIBS = 16;
+  const TUNNEL_SPACING = 170;
+  const TUNNEL_NEAR = 120;
+  const TUNNEL_FOCAL = 780;
 
   let tunnelProgress = 0;
   let tunnelLastAt = 0;
+  let tunnelCamera = 0;
 
   let canvas = null;
   let ctx = null;
@@ -468,17 +474,60 @@
   }
 
   /**
-   * «Туннель» — генеративные световые кривые (в духе AIMP).
-   * Форма кривых живёт по времени и не зависит от музыки: трек влияет
-   * только на цвет и скорость смены палитры.
+   * Неоднородность стены: у камеры она сильнее, в глубине — мягче,
+   * чтобы дальние кольца сходились к точке схода и не пересекались.
+   */
+  function tunnelWobble(theta, z, depth, totalDepth, time) {
+    const taper = utils.clamp(1.1 - depth / totalDepth, 0.25, 1);
+    return 1 + taper * (
+      0.12 * Math.sin(3 * theta + z * 0.012 + time * 0.6) +
+      0.06 * Math.sin(5 * theta - z * 0.02 + time * 0.9) +
+      0.04 * Math.sin(2 * theta + z * 0.028 - time * 0.5)
+    );
+  }
+
+  /** Замкнутая сглаженная кривая Catmull-Rom — контур стены туннеля. */
+  function traceClosedSmooth(points) {
+    const n = points.length;
+    ctx.moveTo(points[0].x, points[0].y);
+
+    for (let i = 0; i < n; i += 1) {
+      const p0 = points[(i - 1 + n) % n];
+      const p1 = points[i];
+      const p2 = points[(i + 1) % n];
+      const p3 = points[(i + 2) % n];
+
+      ctx.bezierCurveTo(
+        p1.x + (p2.x - p0.x) / 6,
+        p1.y + (p2.y - p0.y) / 6,
+        p2.x - (p3.x - p1.x) / 6,
+        p2.y - (p3.y - p1.y) / 6,
+        p2.x,
+        p2.y
+      );
+    }
+
+    ctx.closePath();
+  }
+
+  /**
+   * «Туннель» — полёт сквозь органический туннель.
+   *
+   * Камера непрерывно едет вперёд, а стены — замкнутые кривые Безье с
+   * неоднородным радиусом, закрученные по глубине. Музыка, как и раньше,
+   * управляет только цветом и скоростью смены палитры; форма и движение
+   * камеры живут по собственному времени.
    */
   function drawTunnel(analysis, now, hue, energy, idle) {
     const level = idle ? 0 : utils.clamp(analysis.level, 0, 1);
     const treble = idle ? 0 : utils.clamp(analysis.treble, 0, 1);
 
-    // Скорость цветораскладки: чем громче и «выше» музыка — тем быстрее.
     const dt = tunnelLastAt ? Math.min(80, now - tunnelLastAt) / 1000 : 0.016;
     tunnelLastAt = now;
+
+    tunnelCamera += dt * 210;
+
+    // Цвет: та же палитра, что и раньше; музыка меняет скорость перехода.
     const paletteSpeed = 0.08 + level * 0.55 + treble * 0.3 + beatFlash * 0.9;
     tunnelProgress += dt * paletteSpeed;
 
@@ -489,56 +538,129 @@
     const paletteA = TUNNEL_PALETTES[current];
     const paletteB = TUNNEL_PALETTES[next];
 
+    const time = now * 0.001;
+
+    // Осевая линия туннеля: плавные изгибы, которые меняются во времени.
+    const pathX = function (z) {
+      return 62 * Math.sin(z * 0.0011 + time * 0.07) +
+        26 * Math.sin(z * 0.0029 + 1.7 + time * 0.05);
+    };
+    const pathY = function (z) {
+      return 34 * Math.cos(z * 0.0014 + 0.6 + time * 0.03) +
+        18 * Math.sin(z * 0.0031 + time * 0.04);
+    };
+    // Радиус туннеля «дышит» и меняется по глубине.
+    const pathRadius = function (z) {
+      return 126 * (1 +
+        0.16 * Math.sin(z * 0.0032 + time * 0.22) +
+        0.08 * Math.sin(z * 0.0061 - time * 0.13));
+    };
+
+    const totalDepth = TUNNEL_RINGS * TUNNEL_SPACING;
+    const offset = tunnelCamera % TUNNEL_SPACING;
+    const camX = pathX(tunnelCamera);
+    const camY = pathY(tunnelCamera);
+    const cx = width / 2;
+    const cy = height * 0.5;
+
+    // Кольца на разных глубинах; дальние рисуем первыми.
+    const rings = [];
+    for (let index = 0; index < TUNNEL_RINGS; index += 1) {
+      rings.push({
+        index: index,
+        depth: TUNNEL_NEAR +
+          ((index * TUNNEL_SPACING - offset + totalDepth) % totalDepth),
+      });
+    }
+    rings.sort(function (a, b) { return b.depth - a.depth; });
+
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.lineCap = "round";
 
-    for (let index = 0; index < TUNNEL_CURVES; index += 1) {
-      const baseY = height * (0.14 + (index / (TUNNEL_CURVES - 1)) * 0.72);
-      const amplitude = height * (0.035 + (index % 3) * 0.02);
-      const shapeSpeed = 0.00025 + (index % 4) * 0.00005;
-      const phase = now * shapeSpeed + index * 1.9;
-      const points = new Array(72);
+    // Продольные рёбра стен: замкнутые кольца соединены плавными кривыми.
+    for (let rib = 0; rib < TUNNEL_RIBS; rib += 1) {
+      const theta = (rib / TUNNEL_RIBS) * Math.PI * 2;
+      const points = [];
+      let ribHue = 0;
 
-      for (let i = 0; i < points.length; i += 1) {
-        const t = i / (points.length - 1);
-        const y = baseY +
-          Math.sin(t * Math.PI * 2 * (1 + (index % 3) * 0.45) + phase) * amplitude +
-          Math.sin(t * Math.PI * 4.6 - phase * 0.6 + index) * amplitude * 0.42 +
-          Math.sin(t * 11 + now * 0.0009 + index * 0.7) * amplitude * 0.16;
-        points[i] = { x: t * width, y: y };
+      for (let r = 0; r < rings.length; r += 1) {
+        const depth = rings[r].depth;
+        const scale = TUNNEL_FOCAL / depth;
+        const z = tunnelCamera + depth;
+        const wobble = tunnelWobble(theta, z, depth, totalDepth, time);
+        const radius = pathRadius(z) * scale * wobble;
+
+        points.push({
+          x: cx + (pathX(z) - camX) * scale + Math.cos(theta) * radius,
+          y: cy + (pathY(z) - camY) * scale + Math.sin(theta) * radius,
+        });
+
+        if (r === 0) {
+          const paletteIndex = rib % paletteA.length;
+          ribHue = lerpHue(paletteA[paletteIndex], paletteB[paletteIndex], mix);
+        }
       }
-
-      const paletteIndex = index % paletteA.length;
-      const curveHue = lerpHue(paletteA[paletteIndex], paletteB[paletteIndex], mix) +
-        Math.sin(now * 0.00018 + index) * 6;
-      const alpha = 0.1 + energy * 0.12;
 
       ctx.beginPath();
       traceSmooth(points);
-      ctx.strokeStyle = hsla(curveHue, 88, 62, alpha);
-      ctx.lineWidth = 3.4 + (index % 3) * 1.4;
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = hsla(curveHue, 95, 65, 0.5);
+      ctx.strokeStyle = hsla(ribHue + 18, 88, 64, 0.06 + energy * 0.07);
+      ctx.lineWidth = 1.05;
+      ctx.stroke();
+    }
+
+    // Замкнутые органические стены туннеля.
+    for (let r = 0; r < rings.length; r += 1) {
+      const ring = rings[r];
+      const depth = ring.depth;
+      const scale = TUNNEL_FOCAL / depth;
+      const z = tunnelCamera + depth;
+      const ringX = cx + (pathX(z) - camX) * scale;
+      const ringY = cy + (pathY(z) - camY) * scale;
+      const radius = pathRadius(z) * scale;
+      const points = new Array(TUNNEL_SEGMENTS);
+
+      for (let i = 0; i < TUNNEL_SEGMENTS; i += 1) {
+        const theta = (i / TUNNEL_SEGMENTS) * Math.PI * 2;
+        const wobble = tunnelWobble(theta, z, depth, totalDepth, time);
+        const rr = radius * wobble;
+
+        points[i] = {
+          x: ringX + Math.cos(theta) * rr,
+          y: ringY + Math.sin(theta) * rr,
+        };
+      }
+
+      const nearFade = utils.clamp((depth - TUNNEL_NEAR) / 200, 0, 1);
+      const farFade = utils.clamp((totalDepth - (depth - TUNNEL_NEAR)) / 1400, 0, 1);
+      const alpha = (0.12 + energy * 0.28) * nearFade * (0.2 + 0.8 * farFade);
+      if (alpha <= 0.005) continue;
+
+      const paletteIndex = ring.index % paletteA.length;
+      const ringHue = lerpHue(paletteA[paletteIndex], paletteB[paletteIndex], mix) +
+        (depth / totalDepth) * 34;
+      const sizeFade = 1 - depth / (totalDepth + TUNNEL_NEAR);
+
+      ctx.beginPath();
+      traceClosedSmooth(points);
+      ctx.strokeStyle = hsla(ringHue, 90, 64, Math.min(1, alpha * 0.5));
+      ctx.lineWidth = Math.max(0.6, 4.2 * sizeFade);
       ctx.stroke();
 
       ctx.beginPath();
-      traceSmooth(points);
-      ctx.strokeStyle = hsla(curveHue, 94, 74, 0.28 + energy * 0.3);
-      ctx.lineWidth = 1.1;
+      traceClosedSmooth(points);
+      ctx.strokeStyle = hsla(ringHue, 96, 76, Math.min(1, alpha));
+      ctx.lineWidth = Math.max(0.5, 1.1 * sizeFade + 0.35);
       ctx.stroke();
     }
 
     ctx.restore();
 
-    // Мягкая цветная дымка, привязанная к текущей палитре.
+    // Дымка в глубине туннеля, привязанная к текущей палитре.
     const fogHue = lerpHue(paletteA[0], paletteB[0], mix);
-    const fog = ctx.createRadialGradient(
-      width * 0.5, height * 0.5, 0,
-      width * 0.5, height * 0.5, Math.min(width, height) * 0.62
-    );
-    fog.addColorStop(0, hsla(fogHue, 85, 55, 0.05 + energy * 0.05));
-    fog.addColorStop(1, hsla(fogHue, 85, 45, 0));
+    const fog = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(width, height) * 0.6);
+    fog.addColorStop(0, hsla(fogHue, 90, 58, 0.07 + energy * 0.07));
+    fog.addColorStop(1, hsla(fogHue, 90, 45, 0));
     ctx.fillStyle = fog;
     ctx.fillRect(0, 0, width, height);
   }
