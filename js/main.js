@@ -39,6 +39,7 @@
     MR.audio.dispose();
     MR.health.dispose();
     MR.network.dispose();
+    MR.stationSearch.dispose();
     MR.stats.dispose();
     MR.recorder.dispose();
     MR.recorderUI.dispose();
@@ -60,6 +61,7 @@
     // 2. Аудио и сеть.
     MR.audio.init();
     MR.network.init();
+    MR.radioSearch.init();
     MR.stats.init();
 
     // 3. Интерфейс: сначала шина команд и разделы, затем всё остальное.
@@ -74,6 +76,7 @@
     MR.groupsUI.init();
     MR.eqUI.init();
     MR.stationForm.init();
+    MR.stationSearch.init();
     MR.settingsUI.init();
     MR.infoUI.init();
     MR.statsUI.init();
