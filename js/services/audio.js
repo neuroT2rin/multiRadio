@@ -190,6 +190,48 @@
    * совместимости пробуем captureStream() самого элемента (может быть
    * недоступен из-за CORS).
    */
+  /**
+   * PCM-ответвление для «тайм-машины»: отдаёт сырые сэмплы после анализатора,
+   * не влияя на звук (второй путь уходит в gain=0). Возвращает объект с
+   * disconnect() или null, если граф недоступен.
+   */
+  function createPCMTap(onSamples) {
+    if (!graphUsable() || !analyserNode || !ctx) return null;
+    if (typeof ctx.createScriptProcessor !== "function") return null;
+
+    const processor = ctx.createScriptProcessor(4096, 1, 1);
+    const sink = ctx.createGain();
+    sink.gain.value = 0;
+
+    analyserNode.connect(processor);
+    processor.connect(sink);
+    sink.connect(ctx.destination);
+
+    processor.onaudioprocess = function (event) {
+      const input = event.inputBuffer;
+      const left = input.getChannelData(0);
+      const right = input.numberOfChannels > 1 ? input.getChannelData(1) : left;
+      onSamples(left, right, ctx ? ctx.sampleRate : 44100);
+    };
+
+    let stopped = false;
+
+    return {
+      disconnect: function () {
+        if (stopped) return;
+        stopped = true;
+        try {
+          processor.onaudioprocess = null;
+          analyserNode.disconnect(processor);
+        } catch (error) {
+          /* узел уже отключён */
+        }
+        try { processor.disconnect(); } catch (error) { /* noop */ }
+        try { sink.disconnect(); } catch (error) { /* noop */ }
+      },
+    };
+  }
+
   function getCaptureStream() {
     if (graphUsable() && analyserNode && ctx) {
       if (!captureDestination) {
@@ -675,5 +717,6 @@
     get isGraphReady() { return graphReady; },
     getSourceLabel: sourceLabel,
     getCaptureStream: getCaptureStream,
+    createPCMTap: createPCMTap,
   };
 })(window);

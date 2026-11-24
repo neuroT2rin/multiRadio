@@ -8,7 +8,7 @@
   const MR = (global.MR = global.MR || {});
 
   MR.config = {
-    version: "2.2.0",
+    version: "2.3.0",
     storageKey: "multiradio:state:v2",
     statsKey: "multiradio:stats:v1",
 

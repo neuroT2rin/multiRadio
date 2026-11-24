@@ -42,6 +42,7 @@
     MR.stats.dispose();
     MR.recorder.dispose();
     MR.recorderUI.dispose();
+    MR.timemachine.dispose();
     MR.sleepTimer.dispose();
     MR.voiceSearch.dispose();
     MR.visualizer.dispose();
@@ -67,6 +68,8 @@
     MR.headerUI.init();
     MR.playerUI.init();
     MR.recorderUI.init();
+    MR.timemachine.init();
+    MR.timemachineUI.init();
     MR.stationsUI.init();
     MR.groupsUI.init();
     MR.planUI.init();

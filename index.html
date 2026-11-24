@@ -243,9 +243,11 @@
         </div>
       </div>
 
-      <div class="mini-visualizer" aria-hidden="true">
-        <canvas id="mini-canvas"></canvas>
-        <span class="mini-visualizer__hint" id="mini-hint">визуализация потока</span>
+      <div class="mini-visualizer">
+        <canvas id="mini-canvas" aria-hidden="true"></canvas>
+        <span class="mini-visualizer__hint" id="mini-hint" aria-hidden="true">визуализация потока</span>
+        <button class="timemachine-live" type="button" id="timemachine-live" hidden>LIVE</button>
+        <input type="range" class="timemachine" id="timemachine" min="0" max="1" value="1" step="1" aria-label="Перемотка эфира" title="Буфер эфира наполняется…" disabled />
       </div>
     </section>
 
@@ -609,7 +611,7 @@
         <section class="settings-section" aria-labelledby="settings-about">
           <h3 class="settings-section__title" id="settings-about">О приложении</h3>
           <dl class="settings-list">
-            <div><dt>Версия</dt><dd id="settings-version">2.2.0</dd></div>
+            <div><dt>Версия</dt><dd id="settings-version">2.3.0</dd></div>
             <div><dt>Локальное хранилище</dt><dd id="settings-storage">—</dd></div>
             <div><dt>Технологии</dt><dd>HTML, CSS, Web Audio API, Canvas 2D</dd></div>
           </dl>
@@ -653,6 +655,7 @@
   <script src="js/services/health.js"></script>
   <script src="js/services/stats.js"></script>
   <script src="js/services/recorder.js"></script>
+  <script src="js/services/timemachine.js"></script>
   <!-- Интерфейс -->
   <script src="js/ui/toast.js"></script>
   <script src="js/ui/modal.js"></script>
@@ -672,6 +675,7 @@
   <script src="js/ui/sleep-timer.js"></script>
   <script src="js/ui/voice-search.js"></script>
   <script src="js/ui/recorder.js"></script>
+  <script src="js/ui/timemachine.js"></script>
   <script src="js/ui/theme.js"></script>
   <!-- Визуализация -->
   <script src="js/visualizer/mini.js"></script>

@@ -217,12 +217,92 @@ input[type="range"].range:focus-visible {
 .mini-visualizer__hint {
   position: absolute;
   right: 10px;
-  bottom: 6px;
+  bottom: 11px;
   font-size: 0.62rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
   pointer-events: none;
+}
+
+/* Тонкий ползунок «машины времени» прямо внизу визуализатора потока */
+.timemachine {
+  position: absolute;
+  right: 8px;
+  bottom: 0;
+  left: 8px;
+  z-index: 2;
+  width: calc(100% - 16px);
+  height: 14px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.18s;
+}
+
+.timemachine:hover,
+.timemachine:focus-visible {
+  opacity: 1;
+}
+
+.timemachine:disabled {
+  cursor: default;
+  opacity: 0.15;
+}
+
+.timemachine::-webkit-slider-runnable-track {
+  height: 3px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.55), rgba(167, 139, 250, 0.55));
+  border-radius: var(--radius-pill);
+}
+
+.timemachine::-webkit-slider-thumb {
+  width: 10px;
+  height: 10px;
+  margin-top: -3.5px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #ffffff;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+
+.timemachine::-moz-range-track {
+  height: 3px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.55), rgba(167, 139, 250, 0.55));
+  border-radius: var(--radius-pill);
+}
+
+.timemachine::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+}
+
+.timemachine-live {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 3;
+  padding: 2px 8px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.35);
+}
+
+.timemachine-live:hover {
+  filter: brightness(1.08);
 }
 
 /* --------------------------------------------------------------------------

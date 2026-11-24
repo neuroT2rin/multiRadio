@@ -371,6 +371,7 @@ async function main() {
     theme: document.documentElement.dataset.theme,
     pressed: document.querySelector('#theme-toggle').getAttribute('aria-pressed'),
     cardBg: getComputedStyle(document.querySelector('.card')).backgroundImage.includes('255, 255, 255'),
+    status: MR.store.state.playback.status,
   }))()`);
   await screenshot("light.png");
   await evaluate(`document.querySelector('#theme-toggle').click()`);
@@ -396,7 +397,7 @@ async function main() {
   })()`);
 
   // Локальный звук: проверяем весь путь <audio> → Web Audio → анализатор → canvas.
-  const wav = makeWavDataUrl(6, 8000);
+  const wav = makeWavDataUrl(20, 8000);
   await evaluate(`(() => {
     const station = MR.store.state.stations[0];
     station.primary = ${JSON.stringify(wav)};
@@ -444,6 +445,12 @@ async function main() {
   })()`);
   await screenshot("playing.png");
 
+  results.timemachineEarly = await evaluate(`({
+    available: MR.timemachine.availableSeconds(),
+    capturing: MR.timemachine.isCapturing(),
+    status: MR.store.state.playback.status,
+  })`);
+
   await evaluate(`document.querySelector('#theme-toggle').click()`);
   await sleep(300);
   await screenshot("light-playing.png");
@@ -454,18 +461,36 @@ async function main() {
     now: (document.querySelector('#plan-now .plan-now__name') || {}).textContent || '',
     next: document.querySelectorAll('#plan-next .plan-next__item').length,
     state: document.querySelector('#plan-now-state').textContent,
+    status: MR.store.state.playback.status,
+    available: MR.timemachine.availableSeconds(),
   }))()`);
 
   results.eqDisabledAfterPlay = await evaluate(
     `[...document.querySelectorAll('.eq-band__slider')].filter(s => s.disabled).length`
   );
-  await evaluate(`MR.audio.stop()`);
+
+  results.timemachine = await evaluate(`(() => ({
+    available: Math.round(MR.timemachine.availableSeconds()),
+    capturing: MR.timemachine.isCapturing(),
+    slider: Boolean(document.querySelector('#timemachine')),
+  }))()`);
+
+  results.timemachineRewind = await evaluate(`(() => {
+    const available = MR.timemachine.availableSeconds();
+    const ok = available > 2 ? MR.timemachine.playFrom(1.5) : false;
+    const buffered = MR.timemachine.isBuffered();
+    const liveVisible = !document.querySelector('#timemachine-live').hidden;
+    MR.timemachine.returnLive();
+    return { rewind: ok, buffered: buffered, liveVisible: liveVisible };
+  })()`);
 
   results.recorder = await evaluate(`(() => ({
     supported: MR.recorder.supported(),
     button: Boolean(document.querySelector('#record-btn')),
     capture: Boolean(MR.audio.getCaptureStream()),
   }))()`);
+
+  await evaluate(`MR.audio.stop()`);
 
   results.stats = await evaluate(`(() => {
     const summary = MR.stats.getSummary();

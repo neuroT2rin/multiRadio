@@ -5,7 +5,7 @@
 > DOM/CSS-контракт, подводные камни и маршруты «задача → файлы».
 > Открывай код только по маршруту из §11 и только нужные файлы.
 >
-> Версия проекта: **2.2.0** · обновлено: 2026-11-23
+> Версия проекта: **2.3.0** · обновлено: 2026-11-24
 > Если этот файл расходится с кодом — прав код; обнови файл.
 
 ---
@@ -112,10 +112,11 @@ tests/  store.test.js · browser-smoke.js
 
 ```
 utils → config/app → config/stations → config/equalizer → storage → state → dom
-→ analyser → audio → network → health → stats → recorder
+→ analyser → audio → network → health → stats → recorder → timemachine
 → toast → modal → commands → views → nav → header → player → stations → groups
 → plan → equalizer → station-form → settings → info → stats → sleep-timer → voice-search
-→ recorder → theme → visualizer/mini → visualizer/background → visualizer/index → main
+→ recorder → timemachine → theme → visualizer/mini → visualizer/background
+→ visualizer/index → main
 ```
 
 Зависимости направлены **вниз**: `ui/` и `visualizer/` знают о `core/` и
@@ -141,6 +142,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/services/health.js` | Проверка URL через `Audio(preload=metadata)`, пул, прогресс | `init`, `run({manual})`, `dispose`, `isRunning` |
 | `js/services/stats.js` | Статистика прослушивания (секунды по станциям/жанрам) | `init`, `getSummary`, `reset`, `dispose` |
 | `js/services/recorder.js` | Запись эфира через MediaRecorder в файл | `start`, `stop`, `isRecording`, `supported`, `dispose` |
+| `js/services/timemachine.js` | Буфер последних минут и перемотка в WAV | `init`, `availableSeconds`, `playFrom(sec)`, `returnLive`, `dispose` |
 | `js/ui/commands.js` | Шина `data-command` → обработчик | `init`, `register`, `registerMany`, `run`, `has` |
 | `js/ui/toast.js` | Тосты; слушает `notice` | `init`, `show`, `success`, `error`, `warning`, `info` |
 | `js/ui/modal.js` | Модалки, focus trap, `confirm()` | `init`, `open`, `close`, `closeAll`, `confirm`, `isOpen`, `hasOpen` |
@@ -160,6 +162,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/stats.js` | Панель статистики: станции и жанры | `init`, `render` |
 | `js/ui/theme.js` | Светлая/тёмная тема: `data-theme` на `<html>`, кнопка в шапке | `init`, `apply` |
 | `js/ui/recorder.js` | Кнопка записи и чип REC в плеере | `init`, `render`, `dispose` |
+| `js/ui/timemachine.js` | Ползунок перемотки и кнопка LIVE | `init`, `render` |
 | `js/visualizer/mini.js` | Визуализация потока в плеере (3 режима) | `init`, `draw(analysis)`, `drawIdle`, `setMode`, `mode`, `resize`, `dispose` |
 | `js/visualizer/background.js` | Полноэкранный canvas, режимы | `init`, `draw(analysis, dt, now)`, `resize`, `setMode`, `mode` |
 | `js/visualizer/index.js` | Единственный rAF-цикл, синхронизация UI и режим визуализации | `init`, `dispose`, `setVizMode(bool)`, `isVizMode()` |
@@ -357,7 +360,7 @@ document.querySelector("#stations-list").appendChild(row);
 Плеер:    station-name, station-genre, station-bitrate-chip, station-source-chip,
           record-chip, player-art-emoji, play-pause-btn, play-pause-icon, stop-btn,
           prev-btn, next-btn, record-btn, volume, volume-value, mute-btn, mute-icon,
-          mini-canvas, mini-hint
+          mini-canvas, mini-hint, timemachine, timemachine-live
 Вкладки:  tab-stations, tab-favorites, tab-equalizer, panel-stations,
           panel-favorites, panel-equalizer,
           stations-search, voice-search-btn, voice-live, filter-favorites,
@@ -545,6 +548,7 @@ VPN точно определить нельзя — не обещать это�
 | План эфира | `ui/plan.js`, `index.html` (под «Источники и сеть») | те же | текущая станция + 3 следующие |
 | Светлая тема | `ui/theme.js`, `css/base.css` (токены), блоки `html[data-theme="light"]` во всех css | те же + `state.js` | переключение, reload, контраст |
 | Запись эфира | `services/recorder.js`, `services/audio.js` (`getCaptureStream`), `ui/recorder.js` | те же + `player.css` | старт/стоп, файл, CORS-режим |
+| Тайм-машина | `services/timemachine.js`, `services/audio.js` (`createPCMTap`), `ui/timemachine.js` | те же + `player.css` | буфер, отмотка, LIVE, память |
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
@@ -652,6 +656,11 @@ VPN точно определить нельзя — не обещать это�
   `MR.audio.getCaptureStream()` (звук после анализатора); без CORS или в
   compat-режиме запись может быть недоступна — это штатный отказ, не «чини»
   его записью с микрофона.
+- Тайм-машина держит PCM в памяти (моно 16 кГц, `MAX_SECONDS = 180`): это
+  ~11 МБ, не увеличивай окно без причины. Источник — `createPCMTap` (ветка
+  с gain=0, второй звук не появляется). Отмотка строит WAV и ставит эфир на
+  паузу; уход со станции/остановка сбрасывают буфер. Пока играет буфер,
+  событие `playback` не должно сбрасывать буфер.
 
 ---
 
