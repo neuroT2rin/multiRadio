@@ -26,6 +26,8 @@
   let subtitle = null;
   let errorBox = null;
   let editingId = null;
+  let searchInput = null;
+  let query = "";
   /** id группы, у которой раскрыт список станций (не более одной). */
   let expandedGroupId = null;
 
@@ -261,6 +263,14 @@
     }, head, body);
   }
 
+  function setEmptyText(titleText, textText) {
+    if (!empty) return;
+    const title = empty.querySelector(".empty-state__title");
+    const text = empty.querySelector(".empty-state__text");
+    if (title) title.textContent = titleText;
+    if (text) text.textContent = textText;
+  }
+
   function render() {
     if (!container) return;
 
@@ -268,20 +278,57 @@
       expandedGroupId = null;
     }
 
-    container.innerHTML = "";
+    const all = store.state.groups;
 
-    if (store.state.groups.length === 0) {
-      if (empty) empty.hidden = false;
-      return;
+    if (searchInput) {
+      searchInput.hidden = all.length <= 10;
+      if (all.length <= 10 && query) {
+        query = "";
+        searchInput.value = "";
+      }
     }
 
-    if (empty) empty.hidden = true;
+    const groups = query
+      ? all.filter(function (group) { return group.name.toLowerCase().indexOf(query) !== -1; })
+      : all;
+
+    container.innerHTML = "";
+    container.style.maxHeight = "";
+    container.classList.remove("is-scrollable");
+
+    if (empty) {
+      if (all.length === 0) {
+        empty.hidden = false;
+        setEmptyText(
+          "Групп ещё нет",
+          "Создайте группу «Для работы», «Вечер» или любую другую — и фильтруйте станции одним кликом."
+        );
+      } else if (groups.length === 0) {
+        empty.hidden = false;
+        setEmptyText("Группы не найдены", "Измените поисковый запрос.");
+      } else {
+        empty.hidden = true;
+      }
+    }
+
+    if (groups.length === 0) return;
 
     const fragment = document.createDocumentFragment();
-    store.state.groups.forEach(function (group) {
+    groups.forEach(function (group) {
       fragment.appendChild(createGroupCard(group));
     });
     container.appendChild(fragment);
+
+    // Больше пяти групп — показываем пять и включаем прокрутку.
+    if (groups.length > 5) {
+      const cards = container.querySelectorAll(".group-card");
+      if (cards.length > 5) {
+        const listRect = container.getBoundingClientRect();
+        const fifthRect = cards[4].getBoundingClientRect();
+        container.style.maxHeight = Math.ceil(fifthRect.bottom - listRect.top) + "px";
+        container.classList.add("is-scrollable");
+      }
+    }
   }
 
   /* ------------------------------------------------------------------------
@@ -316,7 +363,18 @@
     title = dom.$("#group-modal-title");
     subtitle = dom.$("#group-modal-subtitle");
     errorBox = dom.$("#group-form-error");
+    searchInput = dom.$("#groups-search");
     if (!container || !modal) return;
+
+    if (searchInput) {
+      const applyQuery = utils.debounce(function (value) {
+        query = String(value || "").trim().toLowerCase();
+        render();
+      }, 120);
+      searchInput.addEventListener("input", function (event) {
+        applyQuery(event.target.value);
+      });
+    }
 
     const titleElement = dom.$("#group-modal-title");
     if (titleElement) titleElement.setAttribute("aria-live", "polite");

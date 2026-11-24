@@ -151,7 +151,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/header.js` | Бейджи сети/плеера, прогресс проверки, `document.title` | `init` |
 | `js/ui/player.js` | Карточка «сейчас играет», управление, громкость, `Space` | `init`, `render` |
 | `js/ui/stations.js` | Списки станций/избранного, поиск, фильтры, вид «список/плитка», точки здоровья | `init`, `render` |
-| `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой) | `init`, `render`, `openEditor(groupId)` |
+| `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой), прокрутка >5 и поиск >10 | `init`, `render`, `openEditor(groupId)` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
 | `js/ui/settings.js` | Настройки вида, compat, export/import (drag-and-drop, замена или слияние), reset | `init`, `open` |
@@ -366,7 +366,8 @@ document.querySelector("#stations-list").appendChild(row);
           group-filter-chip, group-filter-name,
           stations-count, stations-list, stations-empty, favorites-list,
           favorites-empty, eq-presets, eq-controls, eq-hint
-Группы:   groups-list, groups-empty, modal-group, group-form, group-modal-title,
+Группы:   groups-list, groups-empty, groups-search, modal-group, group-form,
+          group-modal-title,
           group-modal-subtitle, gr-name, group-station-options, group-submit,
           group-delete, group-form-error
 Станция:  modal-station, station-form, station-modal-title, station-modal-subtitle,
@@ -406,7 +407,7 @@ document.querySelector("#stations-list").appendChild(row);
 | Кнопки | `.btn`, `.btn-primary`, `.btn-outline`, `.btn-ghost`, `.btn-danger`, `.btn-sm`, `.icon-btn`, `.icon-btn--sm` |
 | Станции | `.view-tabs`, `.view-tab`, `.toolbar`, `.view-switch`, `.view-switch__btn[aria-pressed]`, `.stations-list`, `.stations-list--grid`, `.station-row`, `.is-active`, `.station-row__main/__body/__name/__meta/__actions`, `.health-dot[data-health=online|fallback|offline|checking|unknown]` |
 | EQ | `.eq-controls`, `.eq-band`, `.eq-band__slider`, `.eq-meter__fill`, `.eq-preset[aria-pressed]` |
-| Группы | `.group-card`, `.is-filtered`, `.is-expanded`, `.group-card__head/__toggle/__chev/__stations/__actions`, `.group-station` |
+| Группы | `.group-card`, `.is-filtered`, `.is-expanded`, `.group-card__head/__toggle/__chev/__stations/__actions`, `.group-station`, `.groups-search`, `.groups-list.is-scrollable` |
 | Модалки | `.modal`, `.modal__backdrop/__panel/__header/__body/__footer` |
 | Формы | `.form`, `.form-grid`, `.field`, `.field--span2`, `.field__error`, `.input`, `.checklist`, `.check-item` |
 | Тосты | `.toast-region`, `.toast--success|error|warning|info` |
@@ -538,7 +539,7 @@ VPN точно определить нельзя — не обещать это�
 | Список станций, поиск, фильтры, избранное | `ui/stations.js`, `store.getVisibleStations` | `ui/stations.js` | список/empty state/фильтр |
 | Валидация или добавление станции | `core/state.js` (`validateStationInput`, `addStation`), `ui/station-form.js` | оба + `index.html` (modal) | `tests/store.test.js` |
 | Поля станции в хранилище | `state.js::normalizeStation`, `serialize`, `hydrate` | те же + `config/stations.js`, форма | тесты, reload |
-| Группы и фильтр группы | `state.js` (group actions), `ui/groups.js`, `ui/stations.js` | те же + modal в HTML | тесты, создание/фильтр |
+| Группы и фильтр группы | `state.js` (group actions), `ui/groups.js`, `ui/stations.js` | те же + modal в HTML | тесты, создание/фильтр, прокрутка/поиск |
 | Плеер, play/pause, громкость | `ui/player.js`, `services/audio.js` | те же | клик, статус, звук |
 | Фолбэки, CORS, compat | `services/audio.js` | `audio.js` (+ `ui/settings.js`, если настройка) | аудио-тест/локальный WAV |
 | Эквалайзер, пресеты, полосы | `config/equalizer.js`, `ui/equalizer.js`, `audio.js::applyEq` | те же | 10 полос, пресет, метры |

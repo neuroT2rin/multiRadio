@@ -848,6 +848,25 @@ body.modal-open {
   margin-top: 14px;
 }
 
+.groups-search {
+  margin-top: 10px;
+}
+
+.groups-list.is-scrollable {
+  padding-right: 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.groups-list.is-scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+
+.groups-list.is-scrollable::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+
 .group-card {
   padding: 11px 13px;
   background: rgba(4, 8, 16, 0.3);

@@ -204,6 +204,43 @@ async function main() {
   await evaluate(`document.querySelector('#group-filter-chip').click()`);
   await sleep(200);
 
+  // Панель групп: прокрутка после 5, поиск после 10
+  await evaluate(`(() => {
+    for (let i = 0; i < 5; i += 1) MR.store.addGroup({ name: "Тест-группа " + i, stationIds: [] });
+  })()`);
+  results.groupsScroll = await evaluate(`(() => {
+    const list = document.querySelector('#groups-list');
+    return {
+      scrollable: list.classList.contains('is-scrollable'),
+      maxHeight: list.style.maxHeight,
+      searchHidden: document.querySelector('#groups-search').hidden,
+      cards: document.querySelectorAll('#groups-list .group-card').length,
+    };
+  })()`);
+
+  await evaluate(`(() => {
+    for (let i = 5; i < 10; i += 1) MR.store.addGroup({ name: "Тест-группа " + i, stationIds: [] });
+  })()`);
+  results.groupsSearch = await evaluate(`(() => ({
+    visible: !document.querySelector('#groups-search').hidden,
+    total: MR.store.state.groups.length,
+  }))()`);
+
+  await evaluate(`(() => {
+    const input = document.querySelector('#groups-search');
+    input.value = "Тест-группа 9";
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await sleep(220);
+  results.groupsFiltered = await evaluate(`document.querySelectorAll('#groups-list .group-card').length`);
+
+  await evaluate(`(() => {
+    const input = document.querySelector('#groups-search');
+    input.value = "";
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await sleep(180);
+
   // Валидация и добавление станции
   await evaluate(`document.querySelector('[data-command="station:add"]').click()`);
   await sleep(200);
