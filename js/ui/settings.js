@@ -20,6 +20,46 @@
   let importModal = null;
   let importWarning = null;
   let importResolve = null;
+  let dropZone = null;
+
+  function hasFiles(event) {
+    const types = event.dataTransfer && event.dataTransfer.types;
+    if (!types) return false;
+    for (let i = 0; i < types.length; i += 1) {
+      if (types[i] === "Files") return true;
+    }
+    return false;
+  }
+
+  function clearDropHint() {
+    if (dropZone) dropZone.classList.remove("is-dragover");
+  }
+
+  function onDragOver(event) {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    if (dropZone) dropZone.classList.add("is-dragover");
+  }
+
+  function onDragLeave(event) {
+    if (!modal || modal.contains(event.relatedTarget)) return;
+    clearDropHint();
+  }
+
+  function onDrop(event) {
+    if (!event.dataTransfer || !event.dataTransfer.files || !event.dataTransfer.files.length) return;
+    event.preventDefault();
+    clearDropHint();
+
+    const file = event.dataTransfer.files[0];
+    if (!/\.json$/i.test(file.name) && file.type !== "application/json") {
+      MR.toast.warning("Нужен JSON-файл с настройками.");
+      return;
+    }
+
+    handleFile(file);
+  }
 
   function renderStorage() {
     if (!storageLabel) return;
@@ -195,7 +235,21 @@
     storageLabel = dom.$("#settings-storage");
     importModal = dom.$("#modal-import");
     importWarning = dom.$("#import-warning");
+    dropZone = dom.$("#import-drop");
     if (!modal) return;
+
+    modal.addEventListener("dragenter", onDragOver);
+    modal.addEventListener("dragover", onDragOver);
+    modal.addEventListener("dragleave", onDragLeave);
+    modal.addEventListener("drop", onDrop);
+
+    // Не даём браузеру открыть JSON вместо импорта, если файл бросили мимо.
+    document.addEventListener("dragover", function (event) {
+      if (hasFiles(event)) event.preventDefault();
+    });
+    document.addEventListener("drop", function (event) {
+      if (hasFiles(event)) event.preventDefault();
+    });
 
     if (importModal) {
       const cancel = dom.$("#import-cancel");

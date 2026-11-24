@@ -366,6 +366,22 @@ async function main() {
     toggles: document.querySelectorAll('#modal-settings input').length,
   }))()`);
   await screenshot("settings.png");
+
+  // Drag-and-drop импорта в открытые настройки
+  await evaluate(`(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([JSON.stringify({ version: 2, stations: [], groups: [], favorites: [] })], "settings.json", { type: "application/json" }));
+    document.querySelector("#modal-settings").dispatchEvent(
+      new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt })
+    );
+  })()`);
+  await sleep(350);
+  results.importDrop = await evaluate(`(() => {
+    const open = !document.querySelector('#modal-import').hidden;
+    document.querySelector('#import-cancel').click();
+    return { open: open, closed: document.querySelector('#modal-import').hidden };
+  })()`);
+
   await evaluate(`document.querySelector('#modal-settings [data-close-modal]').click()`);
 
   // Импорт: слияние не стирает текущие станции и группы

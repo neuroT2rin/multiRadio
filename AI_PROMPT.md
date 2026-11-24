@@ -154,7 +154,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой) | `init`, `render`, `openEditor(groupId)` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
 | `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
-| `js/ui/settings.js` | Настройки вида, compat, export/import (замена или слияние), reset | `init`, `open` |
+| `js/ui/settings.js` | Настройки вида, compat, export/import (drag-and-drop, замена или слияние), reset | `init`, `open` |
 | `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
 | `js/ui/sleep-timer.js` | Таймер сна в шапке: отсчёт и остановка радио | `init`, `start(minutes)`, `cancel`, `dispose`, `remainingMs` |
 | `js/ui/voice-search.js` | Голосовой подбор станции (Web Speech API + локальный матчер) | `init`, `start`, `stop`, `match(text)`, `supported`, `dispose` |
@@ -376,7 +376,8 @@ document.querySelector("#stations-list").appendChild(row);
           settings-version, settings-storage
 Прочее:   modal-confirm, confirm-title, confirm-message, confirm-ok, confirm-cancel,
           modal-import, import-title, import-warning, import-merge, import-replace,
-          import-cancel, info-connection, info-connection-state, info-source, info-bitrate,
+          import-cancel, import-drop, info-connection, info-connection-state,
+          info-source, info-bitrate,
           info-playback, info-health, recheck-btn, recheck-label,
           stats-total, stats-stations, stats-genres, stats-empty,
           bg-visualizer, bg-canvas, uptime, toast-region
@@ -552,7 +553,7 @@ VPN точно определить нельзя — не обещать это�
 | Режимы визуализации потока (мини) | `visualizer/mini.js`, `config/app.js`, `state.js` (`miniMode`), `index.html` (меню «Вид») | те же | переключение, отрисовка в каждом режиме, reload |
 | Прогресс/статусы в шапке | `ui/header.js`, `services/health.js`, `health:progress` | `header.js`, `layout.css` | ручная проверка, полоса |
 | Сеть/VPN-статус | `services/network.js`, `ui/header.js`, `ui/info.js` | те же | online/offline, бейдж |
-| Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings`/`modal-import` | экспорт→импорт, v1-файл, замена и слияние |
+| Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings`/`modal-import` | экспорт→импорт, v1-файл, замена, слияние, drop файла |
 | Тема, цвета, отступы | `css/base.css` + конкретный css | css | визуальный просмотр |
 | Адаптив | `css/layout.css`, `css/player.css`, `css/components.css` | css | 390/768/1440 |
 | Тесты логики | `tests/store.test.js` | тест + код | 20/20 |
