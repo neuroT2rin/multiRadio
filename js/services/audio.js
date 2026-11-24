@@ -29,6 +29,8 @@
   let graphReady = false;
   let graphFailed = false;
   let captureDestination = null;
+  /** Отдельная шина «машины времени» в том же AudioContext (без второго контекста). */
+  let bufferBus = null;
   /** Пока слушаем буфер «машины времени», живой эфир беззвучен, но продолжает играть. */
   let bufferSilent = false;
   let intendedPlaying = false;
@@ -155,6 +157,7 @@
       if (sourceNode) sourceNode.disconnect();
       if (gainNode) gainNode.disconnect();
       if (analyserNode) analyserNode.disconnect();
+      if (bufferBus) bufferBus.gain.disconnect();
       filters.forEach(function (filter) { filter.disconnect(); });
     } catch (error) {
       /* узлы уже могли быть отключены */
@@ -164,6 +167,7 @@
     gainNode = null;
     analyserNode = null;
     captureDestination = null;
+    bufferBus = null;
     bufferSilent = false;
     graphReady = false;
 
@@ -191,6 +195,27 @@
   function setBufferSilent(silent) {
     bufferSilent = Boolean(silent);
     applyVolume();
+  }
+
+  /**
+   * Шина для «машины времени»: собственный GainNode в уже существующем
+   * AudioContext (второй контекст не создаётся). Через неё буфер играет
+   * мимо живого GainNode и эквалайзера, поэтому громкость и mute выставляет
+   * сама «машина времени». Возвращает { context, gain } или null.
+   */
+  function getBufferBus() {
+    if (!graphUsable() || !ctx) return null;
+    if (bufferBus && bufferBus.context === ctx) return bufferBus;
+
+    try {
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(ctx.destination);
+      bufferBus = { context: ctx, gain: gain };
+    } catch (error) {
+      bufferBus = null;
+    }
+    return bufferBus;
   }
 
   /**
@@ -747,5 +772,6 @@
     getCaptureStream: getCaptureStream,
     createPCMTap: createPCMTap,
     setBufferSilent: setBufferSilent,
+    getBufferBus: getBufferBus,
   };
 })(window);

@@ -803,6 +803,28 @@ async function main() {
     if (continuousAvailable >= 8) break;
   }
 
+  // Инструментируем планировщик буфера: стыки сегментов должны быть бесшовными.
+  await evaluate(`(() => {
+    window.__tmSchedule = [];
+    const proto = (window.AudioContext || window.webkitAudioContext).prototype;
+    if (proto.__tmPatched) return true;
+    proto.__tmPatched = true;
+    const create = proto.createBufferSource;
+    proto.createBufferSource = function () {
+      const source = create.apply(this, arguments);
+      const start = source.start.bind(source);
+      source.start = function (when) {
+        window.__tmSchedule.push({
+          when: Number.isFinite(when) ? when : 0,
+          duration: source.buffer ? source.buffer.duration : 0,
+        });
+        return start.apply(source, arguments);
+      };
+      return source;
+    };
+    return true;
+  })()`);
+
   results.timemachineContinuousStart = await evaluate(`(() => {
     const ok = MR.timemachine.playFrom(2);
     const slider = document.querySelector('#timemachine');
@@ -818,13 +840,23 @@ async function main() {
     };
   })()`);
 
-  // Первый WAV был ≈2 с: через 3 с старая реализация уже ушла бы в live.
-  await sleep(3000);
+  // Первый сегмент был ≈2 с: через 3 с старая реализация уже ушла бы в live.  await sleep(3000);
   results.timemachineContinuousMid = await evaluate(`(() => ({
     buffered: MR.timemachine.isBuffered(),
     status: MR.store.state.playback.status,
     rewind: Number(MR.timemachine.getRewind().toFixed(2)),
   }))()`);
+
+  // Транзиентная «буферизация» беззвучного эфира не должна выглядеть
+  // прерыванием, пока звучит буфер.
+  results.timemachineBufferingQuiet = await evaluate(`(() => {
+    MR.store.setPlayback({ status: "buffering", isPlaying: true });
+    return {
+      buffered: MR.timemachine.isBuffered(),
+      status: MR.store.state.playback.status,
+      label: document.querySelector('#stream-status').textContent,
+    };
+  })()`);
 
   // Слушаем дольше длины первого сегмента (в сумме ≈9.3 с): лента должна
   // продолжаться без пропусков, эфир — оставаться заглушённым.
@@ -835,6 +867,12 @@ async function main() {
     const rewind = Number(MR.timemachine.getRewind().toFixed(2));
     const buffered = MR.timemachine.isBuffered();
     const status = MR.store.state.playback.status;
+    const schedule = (window.__tmSchedule || []).slice();
+    const gaps = [];
+    for (let i = 1; i < schedule.length; i += 1) {
+      const previous = schedule[i - 1];
+      gaps.push(Number((schedule[i].when - (previous.when + previous.duration)).toFixed(4)));
+    }
     return {
       buffered: buffered,
       playing: MR.timemachine.isBufferPlaying(),
@@ -846,6 +884,9 @@ async function main() {
       liveLevel: Number(analysis.level.toFixed(3)),
       sliderMax: Number(slider.max),
       sliderValue: Number(slider.value),
+      segments: schedule.length,
+      scheduleGaps: gaps,
+      gapless: gaps.length > 0 && gaps.every((gap) => Math.abs(gap) <= 0.005),
       ok: buffered && status === "playing" && rewind >= 1.5 && rewind <= 4,
     };
   })()`);
@@ -861,16 +902,20 @@ async function main() {
     };
   })()`);
 
-  // LIVE снова включает живой эфир: анализатор перестаёт видеть тишину.
+  // LIVE снова включает живой эфир: анализатор перестаёт видеть тишину,
+  // а статус буферизации эфира больше не скрывается.
   await sleep(500);
   results.timemachineContinuousLiveBack = await evaluate(`(() => {
     const analysis = MR.analyser.read(performance.now());
+    MR.store.setPlayback({ status: "buffering", isPlaying: true });
     const result = {
       buffered: MR.timemachine.isBuffered(),
       status: MR.store.state.playback.status,
+      bufferingShown: MR.store.state.playback.status === "buffering",
       silent: analysis.silent,
       level: Number(analysis.level.toFixed(3)),
     };
+    MR.store.setPlayback({ status: "playing", isPlaying: true });
     MR.audio.stop();
     result.statusAfterStop = MR.store.state.playback.status;
     return result;
