@@ -389,10 +389,12 @@ async function main() {
     const canvas = document.querySelector('#bg-canvas');
     const ctx = canvas.getContext('2d');
     const drawn = {};
+    const applied = {};
 
     modes.forEach((mode) => {
       MR.store.setVisualizerMode(mode);
       MR.bg.draw(fake, 16, performance.now());
+      applied[mode] = MR.bg.mode;
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       let count = 0;
       for (let i = 3; i < data.length; i += 4) if (data[i] > 0) count += 1;
@@ -402,6 +404,8 @@ async function main() {
     MR.store.setVisualizerMode('spectrum');
     return {
       drawn: drawn,
+      applied: applied,
+      tunnelFilled: drawn.tunnel > 0 && applied.tunnel === 'tunnel',
       menuItems: document.querySelectorAll('.nav-item[data-mode]').length,
       settingsOptions: document.querySelectorAll('#setting-mode option').length,
     };
