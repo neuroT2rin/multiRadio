@@ -255,7 +255,10 @@
       <div class="mini-visualizer">
         <canvas id="mini-canvas" aria-hidden="true"></canvas>
         <span class="mini-visualizer__hint" id="mini-hint" aria-hidden="true">визуализация потока</span>
-        <button class="timemachine-live" type="button" id="timemachine-live" hidden>LIVE</button>
+        <div class="timemachine-live-wrap">
+          <button class="timemachine-live" type="button" id="timemachine-live" hidden>LIVE</button>
+          <span class="timemachine-lag" id="timemachine-lag" hidden></span>
+        </div>
         <input type="range" class="timemachine" id="timemachine" min="0" max="1" value="1" step="1" aria-label="Перемотка эфира" title="Буфер эфира наполняется…" disabled />
       </div>
     </section>
