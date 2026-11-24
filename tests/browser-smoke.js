@@ -328,9 +328,13 @@ async function main() {
 
   // Режим визуализации: страница скрыта, остаются «Вид» и «Визуализация».
   results.vizMode = await evaluate(`(() => {
-    document.querySelector('#viz-toggle').click();
+    const toggle = document.querySelector('#viz-toggle');
+    const before = toggle.getBoundingClientRect().left;
+    toggle.click();
+    const after = toggle.getBoundingClientRect().left;
     const radioGroup = document.querySelector('.nav-group:not(.nav-group--view)');
     return {
+      buttonShift: Math.round((after - before) * 100) / 100,
       bodyClass: document.body.classList.contains('is-viz-mode'),
       pressed: document.querySelector('#viz-toggle').getAttribute('aria-pressed'),
       mainHidden: getComputedStyle(document.querySelector('#main')).display === 'none',
