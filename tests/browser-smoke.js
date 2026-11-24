@@ -256,31 +256,60 @@ async function main() {
   })()`);
   await sleep(180);
 
-  // Валидация и добавление станции
+  // Валидация и добавление станции: у каждой ссылки свой битрейт
   await evaluate(`document.querySelector('[data-command="station:add"]').click()`);
   await sleep(200);
   await evaluate(`(() => {
     document.querySelector('#st-name').value = 'Тестовая станция';
-    document.querySelector('#st-primary').value = 'ftp://bad';
+    document.querySelector('#st-sources .source-row [data-field="url"]').value = 'ftp://bad';
     document.querySelector('#station-submit').click();
   })()`);
   await sleep(200);
   results.stationValidation = await evaluate(`(() => ({
-    error: document.querySelector('[data-error-for="primary"]').textContent,
-    invalid: document.querySelector('#st-primary').getAttribute('aria-invalid'),
+    error: document.querySelector('[data-error-for="sources.0.url"]').textContent,
+    invalid: document.querySelector('#st-sources .source-row [data-field="url"]').getAttribute('aria-invalid'),
   }))()`);
 
   await evaluate(`(() => {
-    document.querySelector('#st-primary').value = 'https://example.com/stream.mp3';
-    document.querySelector('#st-fallbacks').value = 'https://example.com/stream2.mp3';
-    document.querySelector('#station-submit').click();
+    const rows = document.querySelectorAll('#st-sources .source-row');
+    rows[0].querySelector('[data-field="url"]').value = 'https://example.com/stream.mp3';
+    rows[0].querySelector('[data-field="bitrate"]').value = '320';
+    document.querySelector('#st-add-source').click();
+    const next = document.querySelectorAll('#st-sources .source-row')[1];
+    next.querySelector('[data-field="url"]').value = 'https://example.com/stream2.mp3';
+    next.querySelector('[data-field="bitrate"]').value = '128';
   })()`);
+  await sleep(150);
+  await screenshot("station-form.png");
+  await evaluate(`document.querySelector('#station-submit').click()`);
   await sleep(400);
-  results.stationAdded = await evaluate(`(() => ({
-    rows: document.querySelectorAll('#stations-list .station-row').length,
-    modalClosed: document.querySelector('#modal-station').hidden,
-    hasNew: [...document.querySelectorAll('.station-row__name')].some(el => el.textContent.includes('Тестовая')),
-  }))()`);
+  results.stationAdded = await evaluate(`(() => {
+    const station = MR.store.state.stations.find((item) => item.name === 'Тестовая станция');
+    return {
+      rows: document.querySelectorAll('#stations-list .station-row').length,
+      modalClosed: document.querySelector('#modal-station').hidden,
+      hasNew: [...document.querySelectorAll('.station-row__name')].some(el => el.textContent.includes('Тестовая')),
+      sources: station ? station.sources.length : 0,
+      bestBitrate: station ? MR.store.getStationBitrate(station) : 0,
+      order: station ? MR.store.getPlaybackSources(station).map((source) => source.bitrate) : [],
+    };
+  })()`);
+
+  // При запуске выбирается источник с максимальным битрейтом.
+  results.bestBitratePlayback = await evaluate(`(() => {
+    const station = MR.store.state.stations.find((item) => item.name === 'Тестовая станция');
+    MR.audio.playStation(station.id);
+    const playback = MR.store.state.playback;
+    const result = {
+      urlIndex: playback.urlIndex,
+      bitrate: playback.bitrate,
+      url: playback.url,
+      label: playback.sourceLabel,
+      ordered: MR.store.getPlaybackSources(station).map((source) => source.bitrate),
+    };
+    MR.audio.stop();
+    return result;
+  })()`);
 
   // Вид списка: плитка ↔ список
   results.stationViews = await evaluate(`(() => {
@@ -526,6 +555,7 @@ async function main() {
       total: MR.store.state.stations.length,
       grew: MR.store.state.stations.length === before + 1,
       modal: Boolean(document.querySelector("#modal-import")),
+      importedSources: ((MR.store.state.stations.find((item) => item.name === "Импорт-тест") || {}).sources || []).length,
     };
   })()`);
 
@@ -565,8 +595,7 @@ async function main() {
   const wav = makeWavDataUrl(20, 8000);
   await evaluate(`(() => {
     const station = MR.store.state.stations[0];
-    station.primary = ${JSON.stringify(wav)};
-    station.fallbacks = [];
+    station.sources = [{ url: ${JSON.stringify(wav)}, bitrate: 128 }];
     MR.audio.playStation(station.id);
   })()`);
 
@@ -606,9 +635,35 @@ async function main() {
       bgPixels,
       miniPixels,
       playerPlaying: document.querySelector('.player-card').classList.contains('is-playing'),
+      bitrateChip: document.querySelector('#station-bitrate-chip').textContent,
+      sourceChip: document.querySelector('#station-source-chip').textContent,
+      playbackBitrate: MR.store.state.playback.bitrate,
+      infoSources: document.querySelectorAll('#info-sources .info-source').length,
     };
   })()`);
   await screenshot("playing.png");
+
+  // Карточка «Источники и сеть»: список источников с битрейтами и состоянием.
+  results.infoSourcesLayout = await evaluate(`(() => {
+    const node = document.querySelector('#info-sources');
+    const rect = node.getBoundingClientRect();
+    return {
+      hidden: node.hidden,
+      items: node.querySelectorAll('.info-source').length,
+      top: Math.round(rect.top + window.scrollY),
+      height: Math.round(rect.height),
+      docHeight: document.documentElement.scrollHeight,
+    };
+  })()`);
+  await evaluate(`(() => {
+    const node = document.querySelector('#info-sources');
+    const top = node.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo(0, Math.max(0, top - 320));
+  })()`);
+  await sleep(250);
+  await screenshot("info-sources.png");
+  results.infoSourcesScroll = await evaluate(`Math.round(window.scrollY)`);
+  await evaluate(`window.scrollTo(0, 0)`);
 
   results.timemachineEarly = await evaluate(`({
     available: MR.timemachine.availableSeconds(),
@@ -792,6 +847,20 @@ async function main() {
     expanded: document.querySelector('#nav-toggle').getAttribute('aria-expanded'),
   }))()`);
   await screenshot("mobile-menu.png");
+
+  // Форма станции на мобильной ширине: строки источников не должны ломать вёрстку.
+  await evaluate(`(() => {
+    document.querySelector('#nav-toggle').click();
+    MR.stationForm.open({ mode: "add" });
+  })()`);
+  await sleep(300);
+  results.mobileStationForm = await evaluate(`(() => ({
+    open: !document.querySelector('#modal-station').hidden,
+    rows: document.querySelectorAll('#st-sources .source-row').length,
+    noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+  }))()`);
+  await screenshot("mobile-station-form.png");
+  await evaluate(`MR.modal.close('#modal-station')`);
 
   results.consoleErrors = consoleErrors;
   results.exceptions = exceptions;

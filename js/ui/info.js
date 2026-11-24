@@ -18,6 +18,7 @@
   };
 
   let timer = null;
+  let sourcesBox = null;
 
   function renderNetwork() {
     const network = store.state.network;
@@ -26,6 +27,70 @@
 
     dom.setText("#info-connection", type + downlink);
     dom.setText("#info-connection-state", NETWORK_LABELS[network.status] || "—");
+  }
+
+  /** Список источников текущей станции: битрейт, URL и состояние проверки. */
+  function renderSources() {
+    if (!sourcesBox) return;
+
+    const station = store.getCurrentStation();
+    sourcesBox.innerHTML = "";
+    if (!station) {
+      sourcesBox.hidden = true;
+      return;
+    }
+
+    const sources = store.getStationSources(station);
+    if (!sources.length) {
+      sourcesBox.hidden = true;
+      return;
+    }
+
+    const health = store.getHealth(station.id);
+    const probes = health && Array.isArray(health.sources) ? health.sources : [];
+    const order = store.getPlaybackOrder(station);
+    const playback = store.state.playback;
+    const currentIndex = playback.stationId === station.id && playback.url
+      ? sources.findIndex(function (source) { return source.url === playback.url; })
+      : -1;
+
+    sourcesBox.hidden = false;
+    sourcesBox.appendChild(dom.el("p", {
+      class: "info-sources__title",
+      text: "Источники станции",
+    }));
+
+    const list = dom.el("ul", { class: "info-sources__list" });
+
+    order.forEach(function (index) {
+      const source = sources[index];
+      const probe = probes[index];
+      const isBest = index === order[0];
+      const isCurrent = index === currentIndex;
+      const healthState = !probe ? "unknown" : (probe.ok ? "online" : "offline");
+      const healthTitle = !probe
+        ? "Ещё не проверялся"
+        : (probe.ok ? "Источник отвечает" : "Источник не отвечает");
+
+      const item = dom.el("li", {
+        class: "info-source" + (isBest ? " is-best" : "") + (isCurrent ? " is-current" : ""),
+        title: (isBest ? "Лучший по битрейту. " : "") + source.url,
+      },
+        dom.el("span", { class: "info-source__bitrate", text: utils.formatBitrate(source.bitrate) }),
+        dom.el("span", { class: "info-source__url mono", text: source.url }),
+        dom.el("span", {
+          class: "health-dot",
+          "data-health": healthState,
+          role: "img",
+          title: healthTitle,
+          "aria-label": healthTitle,
+        })
+      );
+
+      list.appendChild(item);
+    });
+
+    sourcesBox.appendChild(list);
   }
 
   function renderPlayback() {
@@ -37,12 +102,29 @@
     const sourceNode = dom.$("#info-source");
     if (sourceNode) sourceNode.title = playback.url || "";
 
-    dom.setText("#info-bitrate", station ? station.bitrate : "—");
+    const bitrateNode = dom.$("#info-bitrate");
+    if (bitrateNode) {
+      if (!station) {
+        bitrateNode.textContent = "—";
+        bitrateNode.title = "";
+      } else {
+        const isCurrent = playback.stationId === station.id &&
+          Boolean(playback.url) && playback.status !== "idle";
+        bitrateNode.textContent = utils.formatBitrate(
+          isCurrent ? playback.bitrate : store.getStationBitrate(station)
+        );
+        bitrateNode.title = isCurrent
+          ? "Битрейт текущего источника"
+          : "Максимальный битрейт среди источников станции";
+      }
+    }
 
     const status = labels[playback.status] || playback.status;
     const sourceNote = playback.sourceLabel ? " · " + playback.sourceLabel : "";
     const errorNote = playback.error ? " · " + playback.error : "";
     dom.setText("#info-playback", status + sourceNote + errorNote);
+
+    renderSources();
   }
 
   function renderHealth() {
@@ -89,6 +171,8 @@
   }
 
   function init() {
+    sourcesBox = dom.$("#info-sources");
+
     MR.commands.register("health:check", function () {
       MR.health.run({ manual: true });
     });
@@ -96,7 +180,10 @@
     store.on("network", renderNetwork);
     store.on("playback", renderPlayback);
     store.on("stations", renderPlayback);
-    store.on("health", renderHealth);
+    store.on("health", function () {
+      renderHealth();
+      renderSources();
+    });
     store.on("health:progress", function () {
       renderHealth();
       renderBusy();

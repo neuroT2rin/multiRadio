@@ -346,7 +346,7 @@
               <dd id="info-source" class="mono">—</dd>
             </div>
             <div class="info-row">
-              <dt>Битрейт станции</dt>
+              <dt>Битрейт источника</dt>
               <dd id="info-bitrate">—</dd>
             </div>
             <div class="info-row">
@@ -358,6 +358,7 @@
               <dd id="info-health">—</dd>
             </div>
           </dl>
+          <div class="info-sources" id="info-sources" hidden></div>
         </section>
       </div>
 
@@ -437,7 +438,7 @@
       <header class="modal__header">
         <div>
           <h2 class="modal__title" id="station-modal-title">Добавить станцию</h2>
-          <p class="modal__subtitle" id="station-modal-subtitle">Основной поток и резервные источники.</p>
+          <p class="modal__subtitle" id="station-modal-subtitle">Источники, битрейт каждой ссылки и группа.</p>
         </div>
         <button class="icon-btn modal__close" type="button" data-close-modal aria-label="Закрыть">✕</button>
       </header>
@@ -458,28 +459,20 @@
             <input class="input" type="text" id="st-genre" name="genre" maxlength="60" autocomplete="off" placeholder="Ambient / Downtempo" />
             <p class="field__error" data-error-for="genre"></p>
           </div>
-          <div class="field">
-            <label class="field__label" for="st-bitrate">Битрейт</label>
-            <input class="input" type="text" id="st-bitrate" name="bitrate" maxlength="20" list="bitrate-options" autocomplete="off" placeholder="128 kbps" />
+          <div class="field field--span2">
+            <span class="field__label" id="st-sources-label">Источники потока <span class="field__req">*</span></span>
+            <p class="field__hint">Для каждой ссылки укажите свой битрейт. При запуске выбирается источник с максимальным битрейтом; если он не отвечает — следующий по убыванию. Пустой битрейт считается неизвестным.</p>
+            <div class="sources-list" id="st-sources" role="group" aria-labelledby="st-sources-label"></div>
+            <p class="field__error" data-error-for="sources"></p>
+            <button class="btn btn-outline btn-sm" type="button" id="st-add-source">+ Добавить источник</button>
             <datalist id="bitrate-options">
-              <option value="96 kbps"></option>
-              <option value="128 kbps"></option>
-              <option value="192 kbps"></option>
-              <option value="256 kbps"></option>
-              <option value="320 kbps"></option>
+              <option value="64"></option>
+              <option value="96"></option>
+              <option value="128"></option>
+              <option value="192"></option>
+              <option value="256"></option>
+              <option value="320"></option>
             </datalist>
-            <p class="field__error" data-error-for="bitrate"></p>
-          </div>
-          <div class="field field--span2">
-            <label class="field__label" for="st-primary">Основной URL потока <span class="field__req">*</span></label>
-            <input class="input" type="url" id="st-primary" name="primary" inputmode="url" autocomplete="off" placeholder="https://example.com/stream.mp3" />
-            <p class="field__error" data-error-for="primary"></p>
-          </div>
-          <div class="field field--span2">
-            <label class="field__label" for="st-fallbacks">Резервные URL</label>
-            <textarea class="input input--area" id="st-fallbacks" name="fallbacks" rows="3" autocomplete="off" placeholder="По одному адресу в строке или через запятую"></textarea>
-            <p class="field__hint">Используются по очереди, если основной поток не отвечает.</p>
-            <p class="field__error" data-error-for="fallbacks"></p>
           </div>
           <div class="field">
             <label class="field__label" for="st-group">Группа</label>

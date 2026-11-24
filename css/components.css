@@ -485,6 +485,61 @@ input[type="search"]::-webkit-search-cancel-button {
   display: none;
 }
 
+/* Источники станции: у каждой ссылки свой битрейт */
+.sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0 8px;
+}
+
+.source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 116px 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.source-row__rate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-row__bitrate {
+  width: 100%;
+  min-width: 0;
+  padding-left: 8px;
+  padding-right: 4px;
+}
+
+.source-row__unit {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.source-row__remove {
+  color: var(--text-dim);
+}
+
+.source-row__remove:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.source-row__remove:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.source-row__error {
+  grid-column: 1 / -1;
+  margin-top: -2px;
+}
+
+#st-add-source {
+  align-self: flex-start;
+}
+
 .input {
   width: 100%;
   padding: 10px 12px;
@@ -1170,6 +1225,68 @@ body.is-file-dragging {
 .info-row dd {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Длинные URL (в том числе data:) не должны растягивать страницу на экраны. */
+#info-source {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Источники текущей станции: битрейт, адрес, состояние */
+.info-sources {
+  margin-top: 14px;
+}
+
+.info-sources__title {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.info-sources__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.info-source {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 10px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 0.74rem;
+  border-left: 2px solid transparent;
+  border-radius: 8px;
+}
+
+.info-source.is-current {
+  background: var(--accent-softer);
+  border-left-color: var(--accent);
+}
+
+.info-source__bitrate {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.info-source.is-best .info-source__bitrate {
+  color: var(--accent);
+}
+
+.info-source__url {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
 }
 
 /* --------------------------------------------------------------------------

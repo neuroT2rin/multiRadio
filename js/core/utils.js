@@ -135,6 +135,22 @@
       });
   }
 
+  /** Приводит битрейт к целому кбит/с: «320 kbps» → 320, пусто/мусор → 0. */
+  function normalizeBitrate(value) {
+    if (typeof value === "number") {
+      return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+    }
+    const match = String(value === undefined || value === null ? "" : value).match(/\d+/);
+    const parsed = match ? parseInt(match[0], 10) : 0;
+    return parsed > 0 ? parsed : 0;
+  }
+
+  /** Битрейт для интерфейса: 320 → «320 kbps», 0 → «— kbps». */
+  function formatBitrate(bitrate) {
+    const value = normalizeBitrate(bitrate);
+    return value ? value + " kbps" : "— kbps";
+  }
+
   function pluralRu(count, kind) {
     const forms = PLURALS[kind] || PLURALS.station;
     const n = Math.abs(Number(count) || 0);
@@ -212,6 +228,8 @@
     formatDuration: formatDuration,
     formatRelative: formatRelative,
     formatBytes: formatBytes,
+    normalizeBitrate: normalizeBitrate,
+    formatBitrate: formatBitrate,
     debounce: debounce,
     prefersReducedMotion: prefersReducedMotion,
   };

@@ -56,16 +56,36 @@ function reset() {
   return store.state;
 }
 
+function stationInput(station) {
+  return {
+    name: station.name,
+    genre: station.genre,
+    emoji: station.emoji,
+    sources: station.sources.map((source) => ({
+      url: source.url,
+      bitrate: source.bitrate,
+    })),
+    groupId: "",
+  };
+}
+
 console.log("\nConfig");
-test("8 станций, уникальные id и имена, валидные URL", () => {
+test("8 станций с источниками, уникальные id и имена", () => {
   const stations = store.state.stations;
   assert.strictEqual(stations.length, 8);
   assert.strictEqual(new Set(stations.map((s) => s.id)).size, 8);
   assert.strictEqual(new Set(stations.map((s) => s.name.toLowerCase())).size, 8);
-  stations.forEach((s) => {
-    assert.ok(MR.utils.isHttpUrl(s.primary), s.name + ": primary");
-    s.fallbacks.forEach((url) => assert.ok(MR.utils.isHttpUrl(url), s.name + ": fallback"));
+
+  stations.forEach((station) => {
+    assert.ok(Array.isArray(station.sources) && station.sources.length > 0, station.name + ": sources");
+    station.sources.forEach((source) => {
+      assert.ok(MR.utils.isHttpUrl(source.url), station.name + ": url");
+      assert.ok(Number.isInteger(source.bitrate) && source.bitrate >= 0, station.name + ": bitrate");
+    });
   });
+
+  const fip = stations.find((s) => s.id === "fip");
+  assert.strictEqual(store.getStationBitrate(fip), 192);
 });
 
 test("10 полос эквалайзера и 7 пресетов", () => {
@@ -75,68 +95,150 @@ test("10 полос эквалайзера и 7 пресетов", () => {
 });
 
 console.log("\nСтанции");
-test("станция без URL отклоняется", () => {
-  const result = store.addStation({ name: "Test", primary: "ftp://bad" });
+test("станция без валидного источника отклоняется", () => {
+  const result = store.addStation({
+    name: "Test",
+    sources: [{ url: "ftp://bad", bitrate: 128 }],
+  });
   assert.strictEqual(result.ok, false);
-  assert.ok(result.errors.primary);
+  assert.ok(result.errors["sources.0.url"]);
 });
 
 test("дубликат имени без учёта регистра отклоняется", () => {
-  const result = store.addStation({ name: "groove salad", primary: "https://example.com/a.mp3" });
+  const result = store.addStation({
+    name: "groove salad",
+    sources: [{ url: "https://example.com/a.mp3", bitrate: 128 }],
+  });
   assert.strictEqual(result.ok, false);
   assert.ok(result.errors.name);
 });
 
 test("кириллица превращается в читаемый id", () => {
-  const result = store.addStation({ name: "Наше Радио Тест", primary: "https://example.com/nashe.mp3" });
+  const result = store.addStation({
+    name: "Наше Радио Тест",
+    sources: [{ url: "https://example.com/nashe.mp3", bitrate: 128 }],
+  });
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.station.id, "nashe-radio-test");
 });
 
-test("добавление с резервами и группой", () => {
+test("источники с битрейтами и группой", () => {
   const group = store.addGroup({ name: "Для теста", stationIds: [] }).group;
   const result = store.addStation({
     name: "Deep Focus",
-    primary: "https://example.com/focus.mp3",
-    fallbacks: ["https://example.com/focus2.mp3", "bad-url"],
+    sources: [
+      { url: "https://example.com/focus.mp3", bitrate: "192 kbps" },
+      { url: "https://example.com/focus2.mp3", bitrate: 320 },
+    ],
     groupId: group.id,
+  });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.station.sources.length, 2);
+  assert.strictEqual(result.station.sources[0].bitrate, 192);
+  assert.strictEqual(result.station.sources[1].bitrate, 320);
+  assert.strictEqual(store.getGroupOfStation(result.station.id).id, group.id);
+});
+
+test("некорректный битрейт отклоняется", () => {
+  const result = store.addStation({
+    name: "Bad Bitrate",
+    sources: [{ url: "https://example.com/bad.mp3", bitrate: "abc" }],
   });
   assert.strictEqual(result.ok, false);
-  assert.ok(result.errors.fallbacks);
+  assert.ok(result.errors["sources.0.bitrate"]);
+});
 
-  const good = store.addStation({
-    name: "Deep Focus",
-    primary: "https://example.com/focus.mp3",
-    fallbacks: ["https://example.com/focus2.mp3"],
-    groupId: group.id,
+test("дубликат URL внутри станции отклоняется", () => {
+  const result = store.addStation({
+    name: "Duplicate Inside",
+    sources: [
+      { url: "https://example.com/same.mp3", bitrate: 128 },
+      { url: "https://example.com/same.mp3", bitrate: 320 },
+    ],
   });
-  assert.strictEqual(good.ok, true);
-  assert.strictEqual(good.station.fallbacks.length, 1);
-  assert.strictEqual(store.getGroupOfStation(good.station.id).id, group.id);
+  assert.strictEqual(result.ok, false);
+  assert.ok(result.errors["sources.1.url"]);
+});
+
+test("поток другой станции нельзя добавить повторно", () => {
+  const result = store.addStation({
+    name: "Duplicate Across",
+    sources: [{ url: "https://example.com/focus.mp3", bitrate: 128 }],
+  });
+  assert.strictEqual(result.ok, false);
+  assert.ok(/уже добавлен/.test(result.errors["sources.0.url"]));
+});
+
+test("порядок воспроизведения — по убыванию битрейта", () => {
+  const result = store.addStation({
+    name: "Bitrate Order",
+    sources: [
+      { url: "https://example.com/order-a.mp3", bitrate: 128 },
+      { url: "https://example.com/order-b.mp3", bitrate: 320 },
+      { url: "https://example.com/order-c.mp3", bitrate: 0 },
+      { url: "https://example.com/order-d.mp3", bitrate: 192 },
+    ],
+  });
+
+  assert.strictEqual(result.ok, true);
+  const ordered = store.getPlaybackSources(result.station);
+  assert.deepStrictEqual(ordered.map((source) => source.bitrate), [320, 192, 128, 0]);
+  assert.deepStrictEqual(ordered.map((source) => source.url), [
+    "https://example.com/order-b.mp3",
+    "https://example.com/order-d.mp3",
+    "https://example.com/order-a.mp3",
+    "https://example.com/order-c.mp3",
+  ]);
+  assert.strictEqual(store.getStationBitrate(result.station), 320);
+  assert.deepStrictEqual(store.getStationUrls(result.station), [
+    "https://example.com/order-a.mp3",
+    "https://example.com/order-b.mp3",
+    "https://example.com/order-c.mp3",
+    "https://example.com/order-d.mp3",
+  ]);
 });
 
 test("редактирование возвращает streamChanged", () => {
   const station = store.findStation("groove-salad");
-  const result = store.updateStation(station.id, {
-    name: station.name,
-    genre: station.genre,
-    bitrate: station.bitrate,
-    primary: "https://ice2.somafm.com/groovesalad-128-mp3",
-    fallbacks: station.fallbacks,
-    groupId: "",
-  });
+  const input = stationInput(station);
+  input.sources[0] = { url: "https://example.com/new-primary.mp3", bitrate: 320 };
+
+  const result = store.updateStation(station.id, input);
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.streamChanged, true);
+  assert.strictEqual(store.findStation(station.id).sources[0].bitrate, 320);
+
+  const again = store.updateStation(station.id, stationInput(store.findStation(station.id)));
+  assert.strictEqual(again.ok, true);
+  assert.strictEqual(again.streamChanged, false);
+});
+
+test("старый формат primary/fallbacks + bitrate нормализуется", () => {
+  const result = store.addStation({
+    name: "Legacy Input",
+    bitrate: "128 kbps",
+    primary: "https://example.com/legacy.mp3",
+    fallbacks: ["https://example.com/legacy2.mp3"],
+  });
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(result.station.sources, [
+    { url: "https://example.com/legacy.mp3", bitrate: 128 },
+    { url: "https://example.com/legacy2.mp3", bitrate: 128 },
+  ]);
 });
 
 test("удаление чистит избранное, группы и здоровье", () => {
-  const station = store.addStation({ name: "Temp", primary: "https://example.com/temp.mp3" }).station;
+  const station = store.addStation({
+    name: "Temp",
+    sources: [{ url: "https://example.com/temp.mp3", bitrate: 128 }],
+  }).station;
   store.toggleFavorite(station.id);
-  store.setHealth(station.id, { primary: { ok: true }, fallbacks: [] });
+  store.setHealth(station.id, { sources: [{ ok: true }], checkedAt: Date.now() });
   store.removeStation(station.id);
   assert.strictEqual(store.state.favorites.has(station.id), false);
   assert.strictEqual(store.getHealth(station.id), null);
-  store.state.groups.forEach((g) => assert.ok(!g.stationIds.includes(station.id)));
+  store.state.groups.forEach((group) => assert.ok(!group.stationIds.includes(station.id)));
 });
 
 console.log("\nГруппы");
@@ -203,6 +305,35 @@ test("избранное фильтруется", () => {
   assert.strictEqual(store.getVisibleStations().length, 1);
 });
 
+console.log("\nЗдоровье источников");
+test("сводка учитывает лучший битрейт", () => {
+  reset();
+  store.setHealth("fip", {
+    sources: [{ ok: false, reason: "timeout" }, { ok: true }],
+    checkedAt: Date.now(),
+  });
+  let summary = store.getHealthSummary();
+  assert.strictEqual(summary.checked, 1);
+  assert.strictEqual(summary.online, 0);
+  assert.strictEqual(summary.fallbackOnly, 1);
+  assert.strictEqual(summary.offline, 0);
+
+  store.setHealth("fip", {
+    sources: [{ ok: true }, { ok: false, reason: "media-error" }],
+    checkedAt: Date.now(),
+  });
+  summary = store.getHealthSummary();
+  assert.strictEqual(summary.online, 1);
+  assert.strictEqual(summary.fallbackOnly, 0);
+
+  store.setHealth("fip", {
+    sources: [{ ok: false, reason: "timeout" }, { ok: false, reason: "media-error" }],
+    checkedAt: Date.now(),
+  });
+  summary = store.getHealthSummary();
+  assert.strictEqual(summary.offline, 1);
+});
+
 console.log("\nСохранение и импорт");
 test("сохранение и восстановление снимка", () => {
   reset();
@@ -216,6 +347,7 @@ test("сохранение и восстановление снимка", () => 
 
   const saved = MR.storage.get(MR.config.storageKey, null);
   assert.ok(saved && saved.version === 2);
+  assert.ok(Array.isArray(saved.stations[0].sources));
   assert.strictEqual(saved.favorites.length, 1);
 
   const counts = store.hydrate(saved);
@@ -225,9 +357,10 @@ test("сохранение и восстановление снимка", () => 
   assert.strictEqual(store.state.ui.bgEnabled, false);
   assert.strictEqual(store.state.ui.mode, "orbit");
   assert.deepStrictEqual(store.getGroup(store.state.groups[0].id).stationIds, ["fip"]);
+  assert.ok(store.findStation("fip").sources.length >= 1);
 });
 
-test("миграция v1: stationGroups превращается в членство", () => {
+test("миграция v1: stationGroups и старые источники", () => {
   MR.storage.remove(MR.config.storageKey);
   const legacy = {
     version: 1,
@@ -237,7 +370,7 @@ test("миграция v1: stationGroups превращается в членс�
     groups: [{ id: "group-1", name: "Старая", stationIds: [] }],
     stationGroups: { "groove-salad": "group-1" },
     stations: [
-      { id: "fip", name: "FIP", genre: "Jazz", bitrate: "128", primary: "https://icecast.radiofrance.fr/fip-midfi.mp3", fallbacks: [], emoji: "🎷" },
+      { id: "fip", name: "FIP", genre: "Jazz", bitrate: "128", primary: "https://icecast.radiofrance.fr/fip-midfi.mp3", fallbacks: ["https://icecast.radiofrance.fr/fip-hifi.aac"], emoji: "🎷" },
       { id: "groove-salad", name: "Groove Salad", genre: "Chill", bitrate: "128", primary: "https://ice1.somafm.com/groovesalad-128-mp3", fallbacks: [], emoji: "🌊" },
     ],
   };
@@ -249,6 +382,12 @@ test("миграция v1: stationGroups превращается в членс�
   assert.strictEqual(store.state.eqGains[0], 3);
   assert.strictEqual(store.state.eqGains[1], -2);
   assert.deepStrictEqual(store.getGroup("group-1").stationIds, ["groove-salad"]);
+
+  const fip = store.findStation("fip");
+  assert.deepStrictEqual(fip.sources, [
+    { url: "https://icecast.radiofrance.fr/fip-midfi.mp3", bitrate: 128 },
+    { url: "https://icecast.radiofrance.fr/fip-hifi.aac", bitrate: 128 },
+  ]);
 });
 
 test("импорт отвергает неизвестную версию", () => {
@@ -258,7 +397,10 @@ test("импорт отвергает неизвестную версию", () =
 });
 
 test("сброс возвращает стандартный набор", () => {
-  store.addStation({ name: "Временная", primary: "https://example.com/x.mp3" });
+  store.addStation({
+    name: "Временная",
+    sources: [{ url: "https://example.com/x.mp3", bitrate: 128 }],
+  });
   store.resetAll();
   assert.strictEqual(store.state.stations.length, 8);
   assert.strictEqual(store.state.groups.length, 0);
@@ -269,6 +411,8 @@ test("сброс возвращает стандартный набор", () => 
 test("служебные функции не падают без данных", () => {
   assert.strictEqual(store.getHealthSummary().total, store.state.stations.length);
   assert.strictEqual(store.getStationUrls(null).length, 0);
+  assert.strictEqual(store.getStationSources(null).length, 0);
+  assert.strictEqual(store.getStationBitrate(null), 0);
   assert.strictEqual(store.findStation("nope"), null);
   assert.strictEqual(store.getGroupOfStation("nope"), null);
 });

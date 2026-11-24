@@ -8,7 +8,7 @@
   const MR = (global.MR = global.MR || {});
 
   MR.config = {
-    version: "2.4.0",
+    version: "2.5.0",
     storageKey: "multiradio:state:v2",
     statsKey: "multiradio:stats:v1",
 
@@ -39,8 +39,11 @@
       connectTimeoutMs: 12000,
       /** Пауза перед переключением на резервный источник. */
       retryDelayMs: 700,
-      /** Максимальное число резервных URL, сохраняемых у станции. */
-      maxFallbacks: 5,
+      /** Максимальное число источников (URL) у одной станции. */
+      maxSources: 6,
+      /** Допустимый битрейт одного источника, кбит/с. */
+      minBitrate: 8,
+      maxBitrate: 1024,
     },
 
     limits: {
@@ -49,7 +52,6 @@
       groupNameLength: 40,
       stationNameLength: 60,
       genreLength: 60,
-      bitrateLength: 20,
       emojiLength: 8,
     },
   };

@@ -38,6 +38,7 @@
         stationId: null,
         urlIndex: 0,
         url: "",
+        bitrate: null,
         sourceLabel: "",
         isPlaying: false,
         error: null,
@@ -49,7 +50,7 @@
       eqGains: defaults.eqBands.map(function () { return 0; }),
       eqPreset: "flat",
 
-      /** id → { primary:{ok,latencyMs,reason}, fallbacks:[...], checkedAt } */
+      /** id → { sources:[{ok, reason}], checkedAt } */
       health: {},
       healthProgress: {
         running: false,
@@ -143,35 +144,64 @@
     return typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,47}$/.test(value);
   }
 
+  function normalizeStationBitrate(value) {
+    const bitrate = utils.normalizeBitrate(value);
+    if (!bitrate) return 0;
+    return utils.clamp(bitrate, config.audio.minBitrate, config.audio.maxBitrate);
+  }
+
+  /**
+   * Приводит источники станции к единому виду [{url, bitrate}].
+   * Понимает и новый формат (sources), и старый (primary/fallbacks + bitrate):
+   * в старом битрейт был общим, поэтому он проставляется каждой ссылке.
+   */
+  function normalizeStationSources(raw) {
+    const legacyBitrate = normalizeStationBitrate(raw.bitrate);
+    let list = Array.isArray(raw.sources) ? raw.sources : [];
+
+    if (!list.length) {
+      const primary = typeof raw.primary === "string" ? raw.primary.trim() : "";
+      if (primary) list = [{ url: primary, bitrate: legacyBitrate }];
+      (Array.isArray(raw.fallbacks) ? raw.fallbacks : []).forEach(function (url) {
+        list.push({ url: url, bitrate: legacyBitrate });
+      });
+    }
+
+    const seen = Object.create(null);
+    const sources = [];
+
+    list.forEach(function (item) {
+      const url = typeof item === "string"
+        ? item.trim()
+        : (item && typeof item === "object" && typeof item.url === "string" ? item.url.trim() : "");
+      if (!utils.isHttpUrl(url) || seen[url]) return;
+      seen[url] = true;
+      sources.push({
+        url: url,
+        bitrate: item && typeof item === "object" ? normalizeStationBitrate(item.bitrate) : 0,
+      });
+    });
+
+    return sources.slice(0, config.audio.maxSources);
+  }
+
   function normalizeStation(raw, usedIds) {
     if (!raw || typeof raw !== "object") return null;
 
     const name = cleanText(raw.name, config.limits.stationNameLength);
-    const primary = typeof raw.primary === "string" ? raw.primary.trim() : "";
+    const sources = normalizeStationSources(raw);
 
-    if (!name || !utils.isHttpUrl(primary)) return null;
+    if (!name || !sources.length) return null;
 
     const baseId = isValidId(raw.id) ? raw.id : utils.slugify(name);
     const id = uniqueId(baseId, usedIds);
-
-    const seen = Object.create(null);
-    const fallbacks = (Array.isArray(raw.fallbacks) ? raw.fallbacks : [])
-      .map(function (url) { return typeof url === "string" ? url.trim() : ""; })
-      .filter(function (url) {
-        if (!utils.isHttpUrl(url) || url === primary || seen[url]) return false;
-        seen[url] = true;
-        return true;
-      })
-      .slice(0, config.audio.maxFallbacks);
 
     return {
       id: id,
       name: name,
       genre: cleanText(raw.genre, config.limits.genreLength) || "Без жанра",
-      bitrate: cleanText(raw.bitrate, config.limits.bitrateLength) || "—",
       emoji: cleanEmoji(raw.emoji),
-      primary: primary,
-      fallbacks: fallbacks,
+      sources: sources,
     };
   }
 
@@ -347,7 +377,7 @@
     };
     state.playback = {
       status: "idle", stationId: null, urlIndex: 0,
-      url: "", sourceLabel: "", isPlaying: false, error: null,
+      url: "", bitrate: null, sourceLabel: "", isPlaying: false, error: null,
     };
 
     return {
@@ -382,10 +412,10 @@
           id: station.id,
           name: station.name,
           genre: station.genre,
-          bitrate: station.bitrate,
           emoji: station.emoji,
-          primary: station.primary,
-          fallbacks: station.fallbacks.slice(),
+          sources: station.sources.map(function (source) {
+            return { url: source.url, bitrate: source.bitrate };
+          }),
         };
       }),
       favorites: Array.from(state.favorites),
@@ -465,9 +495,47 @@
     });
   }
 
+  /** Копия списка источников станции: [{url, bitrate}] в порядке ввода. */
+  const getStationSources = function (station) {
+    if (!station || !Array.isArray(station.sources)) return [];
+    return station.sources.map(function (source) {
+      return { url: source.url, bitrate: normalizeStationBitrate(source.bitrate) };
+    });
+  };
+
+  /** URL источников в порядке ввода (для проверки доступности). */
   const getStationUrls = function (station) {
-    if (!station) return [];
-    return [station.primary].concat(station.fallbacks || []);
+    return getStationSources(station).map(function (source) { return source.url; });
+  };
+
+  /**
+   * Порядок воспроизведения: индексы источников по убыванию битрейта.
+   * При равном битрейте сохраняется порядок ввода. Источники без битрейта
+   * (0) идут последними.
+   */
+  const getPlaybackOrder = function (station) {
+    const sources = getStationSources(station);
+    return sources
+      .map(function (source, index) { return index; })
+      .sort(function (a, b) {
+        const diff = (sources[b].bitrate || 0) - (sources[a].bitrate || 0);
+        return diff !== 0 ? diff : a - b;
+      });
+  };
+
+  /** Источники в порядке воспроизведения: [{url, bitrate, index}]. */
+  const getPlaybackSources = function (station) {
+    const sources = getStationSources(station);
+    return getPlaybackOrder(station).map(function (index) {
+      return { url: sources[index].url, bitrate: sources[index].bitrate, index: index };
+    });
+  };
+
+  /** Максимальный битрейт среди источников станции (0 — не указан). */
+  const getStationBitrate = function (station) {
+    return getStationSources(station).reduce(function (max, source) {
+      return Math.max(max, source.bitrate || 0);
+    }, 0);
   };
 
   function getHealth(stationId) {
@@ -475,25 +543,64 @@
   }
 
   function getHealthSummary() {
-    const entries = Object.keys(state.health).map(function (id) { return state.health[id]; });
-    return {
+    const summary = {
       total: state.stations.length,
-      checked: entries.length,
-      online: entries.filter(function (h) {
-        return h.primary && h.primary.ok;
-      }).length,
-      fallbackOnly: entries.filter(function (h) {
-        return !(h.primary && h.primary.ok) && (h.fallbacks || []).some(function (item) { return item.ok; });
-      }).length,
-      offline: entries.filter(function (h) {
-        return !(h.primary && h.primary.ok) && !(h.fallbacks || []).some(function (item) { return item.ok; });
-      }).length,
+      checked: 0,
+      online: 0,
+      fallbackOnly: 0,
+      offline: 0,
     };
+
+    state.stations.forEach(function (station) {
+      const health = state.health[station.id];
+      if (!health) return;
+      summary.checked += 1;
+
+      const sources = getStationSources(station);
+      const probes = Array.isArray(health.sources) ? health.sources : [];
+      const bestBitrate = getStationBitrate(station);
+      const anyOk = probes.some(function (probe) { return probe && probe.ok; });
+      // «Онлайн» — когда доступен лучший по битрейту источник. Если таких
+      // несколько (равный битрейт), достаточно любого из них.
+      const bestOk = probes.some(function (probe, index) {
+        return probe && probe.ok && (sources[index] ? sources[index].bitrate : 0) === bestBitrate;
+      });
+
+      if (bestOk) summary.online += 1;
+      else if (anyOk) summary.fallbackOnly += 1;
+      else summary.offline += 1;
+    });
+
+    return summary;
   }
 
   /* ------------------------------------------------------------------------
      Станции
      ------------------------------------------------------------------------ */
+
+  /** Входные источники: новый формат (sources) или старый (primary/fallbacks). */
+  function inputSourceList(source) {
+    if (Array.isArray(source.sources)) {
+      return source.sources.map(function (item) {
+        if (typeof item === "string") return { url: item, bitrate: "" };
+        return {
+          url: item && typeof item.url === "string" ? item.url : "",
+          bitrate: item ? item.bitrate : "",
+        };
+      });
+    }
+
+    const list = [];
+    const primary = typeof source.primary === "string" ? source.primary.trim() : "";
+    if (primary) list.push({ url: primary, bitrate: source.bitrate });
+    const fallbacks = Array.isArray(source.fallbacks)
+      ? source.fallbacks
+      : utils.parseUrlList(source.fallbacks);
+    fallbacks.forEach(function (url) {
+      list.push({ url: url, bitrate: source.bitrate });
+    });
+    return list;
+  }
 
   function validateStationInput(input, excludeId) {
     const source = input || {};
@@ -509,29 +616,63 @@
       errors.name = "Станция с таким названием уже есть";
     }
 
-    const primary = typeof source.primary === "string" ? source.primary.trim() : "";
-    if (!primary) {
-      errors.primary = "Введите адрес основного потока";
-    } else if (!utils.isHttpUrl(primary)) {
-      errors.primary = "Нужен полный http(s)-адрес";
-    } else if (state.stations.some(function (station) {
-      return station.id !== excludeId && station.primary === primary;
-    })) {
-      errors.primary = "Этот поток уже добавлен у другой станции";
+    const inputs = inputSourceList(source);
+
+    if (!inputs.length) {
+      errors.sources = "Добавьте хотя бы один источник";
+    } else if (inputs.length > config.audio.maxSources) {
+      errors.sources = "Не больше " + config.audio.maxSources + " источников";
     }
 
-    const fallbackList = Array.isArray(source.fallbacks)
-      ? utils.parseUrlList(source.fallbacks.join(" "))
-      : utils.parseUrlList(source.fallbacks);
-    const invalidFallbacks = fallbackList.filter(function (url) { return !utils.isHttpUrl(url); });
-    if (invalidFallbacks.length) {
-      errors.fallbacks = "Проверьте адрес: " + invalidFallbacks.slice(0, 2).join(", ");
-    } else if (fallbackList.length > config.audio.maxFallbacks) {
-      errors.fallbacks = "Не больше " + config.audio.maxFallbacks + " резервных адресов";
-    }
+    const seen = new Set();
+    const sources = [];
+
+    inputs.forEach(function (item, index) {
+      const key = "sources." + index;
+      const url = String(item.url || "").trim();
+      const rawBitrate = item.bitrate;
+      const rawText = rawBitrate === null || rawBitrate === undefined ? "" : String(rawBitrate).trim();
+      const bitrate = utils.normalizeBitrate(rawBitrate);
+      // Пустое поле и явный 0 означают «битрейт неизвестен».
+      const hasBitrate = rawText !== "" && rawText !== "0";
+
+      if (!url) {
+        errors[key + ".url"] = "Введите адрес потока";
+        return;
+      }
+      if (!utils.isHttpUrl(url)) {
+        errors[key + ".url"] = "Нужен полный http(s)-адрес";
+        return;
+      }
+      if (seen.has(url)) {
+        errors[key + ".url"] = "Этот адрес уже есть в списке";
+        return;
+      }
+      seen.add(url);
+
+      const foreign = state.stations.find(function (station) {
+        if (station.id === excludeId) return false;
+        return getStationSources(station).some(function (item) { return item.url === url; });
+      });
+      if (foreign) {
+        errors[key + ".url"] = "Этот поток уже добавлен у станции «" + foreign.name + "»";
+      }
+
+      if (hasBitrate &&
+          (!bitrate || bitrate < config.audio.minBitrate || bitrate > config.audio.maxBitrate)) {
+        errors[key + ".bitrate"] = "Целое число " +
+          config.audio.minBitrate + "–" + config.audio.maxBitrate + " кбит/с";
+      }
+
+      sources.push({
+        url: url,
+        bitrate: bitrate
+          ? utils.clamp(bitrate, config.audio.minBitrate, config.audio.maxBitrate)
+          : 0,
+      });
+    });
 
     const genre = cleanText(source.genre, config.limits.genreLength);
-    const bitrate = cleanText(source.bitrate, config.limits.bitrateLength);
     const emoji = cleanText(source.emoji, config.limits.emojiLength);
     const groupId = source.groupId ? String(source.groupId) : "";
 
@@ -544,13 +685,9 @@
       errors: errors,
       value: {
         name: name,
-        primary: primary,
         genre: genre || "Без жанра",
-        bitrate: bitrate || "—",
         emoji: cleanEmoji(emoji),
-        fallbacks: fallbackList.filter(function (url) {
-          return utils.isHttpUrl(url) && url !== primary;
-        }).slice(0, config.audio.maxFallbacks),
+        sources: sources,
         groupId: groupId,
       },
     };
@@ -569,10 +706,10 @@
       id: uniqueId(utils.slugify(check.value.name), used),
       name: check.value.name,
       genre: check.value.genre,
-      bitrate: check.value.bitrate,
       emoji: check.value.emoji,
-      primary: check.value.primary,
-      fallbacks: check.value.fallbacks,
+      sources: check.value.sources.map(function (source) {
+        return { url: source.url, bitrate: source.bitrate };
+      }),
     };
 
     state.stations.push(station);
@@ -601,10 +738,10 @@
       id: previous.id,
       name: check.value.name,
       genre: check.value.genre,
-      bitrate: check.value.bitrate,
       emoji: check.value.emoji,
-      primary: check.value.primary,
-      fallbacks: check.value.fallbacks.slice(),
+      sources: check.value.sources.map(function (source) {
+        return { url: source.url, bitrate: source.bitrate };
+      }),
     };
 
     state.stations[index] = next;
@@ -623,8 +760,7 @@
       ok: true,
       station: next,
       errors: {},
-      streamChanged: previous.primary !== next.primary ||
-        previous.fallbacks.join("\n") !== next.fallbacks.join("\n"),
+      streamChanged: getStationUrls(previous).join("\n") !== getStationUrls(next).join("\n"),
     };
   }
 
@@ -645,6 +781,7 @@
         stationId: null,
         urlIndex: 0,
         url: "",
+        bitrate: null,
         sourceLabel: "",
         isPlaying: false,
         error: null,
@@ -1044,6 +1181,7 @@
         name: raw.name,
         emoji: raw.emoji,
         genre: raw.genre,
+        sources: raw.sources,
         bitrate: raw.bitrate,
         primary: raw.primary,
         fallbacks: Array.isArray(raw.fallbacks) ? raw.fallbacks : [],
@@ -1175,7 +1313,7 @@
     if (state.playback.stationId && !ids.has(state.playback.stationId)) {
       setPlayback({
         status: "idle", stationId: null, urlIndex: 0,
-        url: "", sourceLabel: "", isPlaying: false, error: null,
+        url: "", bitrate: null, sourceLabel: "", isPlaying: false, error: null,
       });
     }
 
@@ -1206,7 +1344,11 @@
     getGroup: getGroup,
     getGroupOfStation: getGroupOfStation,
     getVisibleStations: getVisibleStations,
+    getStationSources: getStationSources,
     getStationUrls: getStationUrls,
+    getPlaybackOrder: getPlaybackOrder,
+    getPlaybackSources: getPlaybackSources,
+    getStationBitrate: getStationBitrate,
     getHealth: getHealth,
     getHealthSummary: getHealthSummary,
 

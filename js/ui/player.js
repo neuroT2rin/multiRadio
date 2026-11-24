@@ -7,6 +7,7 @@
   const MR = (global.MR = global.MR || {});
   const dom = MR.dom;
   const store = MR.store;
+  const utils = MR.utils;
 
   let card = null;
   let playIcon = null;
@@ -15,6 +16,25 @@
   let muteButton = null;
   let miniHint = null;
 
+  function bitrateText(station) {
+    if (!station) return "— kbps";
+
+    const playback = store.state.playback;
+    const isCurrent = Boolean(
+      station && playback.stationId === station.id && playback.url && playback.status !== "idle"
+    );
+    if (isCurrent) return utils.formatBitrate(playback.bitrate);
+
+    const values = store.getStationSources(station)
+      .map(function (source) { return source.bitrate; })
+      .filter(Boolean);
+    if (!values.length) return "— kbps";
+
+    const max = Math.max.apply(null, values);
+    const unique = Array.from(new Set(values));
+    return unique.length > 1 ? "до " + max + " kbps" : max + " kbps";
+  }
+
   function renderStation() {
     const station = store.getCurrentStation();
     const playback = store.state.playback;
@@ -22,13 +42,23 @@
     dom.setText("#station-name", station ? station.name : "Выберите станцию");
     dom.setText("#station-genre", station ? station.genre : "Список станций — ниже");
     dom.setText("#player-art-emoji", station ? station.emoji : "📻");
-    dom.setText("#station-bitrate-chip", station ? station.bitrate : "— kbps");
+
+    const bitrateChip = dom.$("#station-bitrate-chip");
+    if (bitrateChip) {
+      bitrateChip.textContent = bitrateText(station);
+      const active = Boolean(
+        station && playback.stationId === station.id && playback.url && playback.status !== "idle"
+      );
+      bitrateChip.title = active
+        ? "Битрейт текущего источника"
+        : "Максимальный битрейт среди источников станции";
+    }
 
     const sourceChip = dom.$("#station-source-chip");
     if (sourceChip) {
       const label = playback.sourceLabel || "источник: —";
       sourceChip.textContent = station ? (playback.sourceLabel || "источник: —") : "источник: —";
-      sourceChip.title = label;
+      sourceChip.title = station && playback.url ? playback.url : label;
     }
 
     card.classList.toggle("is-playing", Boolean(playback.isPlaying));

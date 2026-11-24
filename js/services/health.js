@@ -119,9 +119,9 @@
     if (offline) {
       const results = {};
       stations.forEach(function (station) {
+        const urls = store.getStationUrls(station);
         results[station.id] = {
-          primary: { ok: false, reason: "offline" },
-          fallbacks: [],
+          sources: urls.map(function () { return { ok: false, reason: "offline" }; }),
           checkedAt: Date.now(),
         };
       });
@@ -174,8 +174,9 @@
       if (entry.remaining === 0 && urls.length > 0) {
         stationsDone += 1;
         store.setHealth(station.id, {
-          primary: entry.results[0] || { ok: false, reason: "no-url" },
-          fallbacks: entry.results.slice(1).filter(Boolean),
+          sources: entry.results.map(function (result) {
+            return result || { ok: false, reason: "no-url" };
+          }),
           checkedAt: Date.now(),
         });
       }
@@ -198,8 +199,7 @@
       if (entry.urls.length > 0) return;
       stationsDone += 1;
       store.setHealth(stationId, {
-        primary: { ok: false, reason: "no-url" },
-        fallbacks: [],
+        sources: [],
         checkedAt: Date.now(),
       });
     });
@@ -224,8 +224,9 @@
           if (entry.remaining === 0) {
             stationsDone += 1;
             store.setHealth(stationId, {
-              primary: entry.results[0] || { ok: false, reason: "no-url" },
-              fallbacks: entry.results.slice(1).filter(Boolean),
+              sources: entry.results.map(function (result) {
+                return result || { ok: false, reason: "no-url" };
+              }),
               checkedAt: Date.now(),
             });
           }
@@ -244,8 +245,9 @@
     const results = {};
     perStation.forEach(function (entry, stationId) {
       results[stationId] = {
-        primary: entry.results[0] || { ok: false, reason: "no-url" },
-        fallbacks: entry.results.slice(1).filter(Boolean),
+        sources: entry.results.map(function (result) {
+          return result || { ok: false, reason: "no-url" };
+        }),
         checkedAt: Date.now(),
       };
     });

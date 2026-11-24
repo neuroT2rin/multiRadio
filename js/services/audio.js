@@ -305,9 +305,21 @@
      Воспроизведение
      ------------------------------------------------------------------------ */
 
+  /**
+   * Подпись источника: лучший по битрейту запускается первым, остальные —
+   * резерв по убыванию. index — позиция в порядке воспроизведения.
+   */
   function sourceLabel(station, index) {
     if (!station) return "—";
-    return index === 0 ? "основной источник" : "резерв " + index + " из " + station.fallbacks.length;
+    const sources = store.getPlaybackSources(station);
+    const source = sources[index];
+    if (!source) return "—";
+
+    const bitrate = utils.formatBitrate(source.bitrate);
+    const hasBitrate = bitrate !== "— kbps";
+    if (index === 0) return hasBitrate ? bitrate + " · лучший источник" : "лучший источник";
+    return (hasBitrate ? bitrate + " · " : "") +
+      "резерв " + index + " из " + (sources.length - 1);
   }
 
   function startConnectTimer(station, urlIndex) {
@@ -331,20 +343,21 @@
     const station = store.findStation(stationId);
     if (!station) return false;
 
-    const urls = store.getStationUrls(station);
-    if (!urls.length) {
+    const sources = store.getPlaybackSources(station);
+    if (!sources.length) {
       store.setPlayback({
         status: "error",
         stationId: stationId,
         isPlaying: false,
+        bitrate: null,
         error: "У станции нет источников",
       });
       return false;
     }
 
     const requested = Number(options && options.urlIndex);
-    const urlIndex = utils.clamp(Number.isFinite(requested) ? requested : 0, 0, urls.length - 1);
-    const url = urls[urlIndex];
+    const urlIndex = utils.clamp(Number.isFinite(requested) ? requested : 0, 0, sources.length - 1);
+    const url = sources[urlIndex].url;
 
     intendedPlaying = true;
     currentToken += 1;
@@ -355,6 +368,7 @@
       stationId: stationId,
       urlIndex: urlIndex,
       url: url,
+      bitrate: sources[urlIndex].bitrate || null,
       sourceLabel: sourceLabel(station, urlIndex),
       isPlaying: false,
       error: null,
@@ -413,16 +427,17 @@
 
     clearConnectTimer();
 
-    const urls = store.getStationUrls(station);
+    const sources = store.getPlaybackSources(station);
     const nextIndex = fromIndex + 1;
 
-    if (nextIndex < urls.length) {
+    if (nextIndex < sources.length) {
       store.setPlayback({
         status: "connecting",
         isPlaying: false,
         error: null,
         urlIndex: nextIndex,
-        url: urls[nextIndex],
+        url: sources[nextIndex].url,
+        bitrate: sources[nextIndex].bitrate || null,
         sourceLabel: sourceLabel(station, nextIndex),
       });
 
@@ -456,6 +471,7 @@
     store.setPlayback({
       status: "error",
       isPlaying: false,
+      bitrate: null,
       error: reason || "все источники недоступны",
     });
     store.emit("notice", {
@@ -515,7 +531,7 @@
   function onEnded() {
     clearConnectTimer();
     intendedPlaying = false;
-    store.setPlayback({ status: "idle", isPlaying: false });
+    store.setPlayback({ status: "idle", isPlaying: false, bitrate: null });
   }
 
   function onError() {
@@ -608,6 +624,7 @@
       status: "idle",
       isPlaying: false,
       url: "",
+      bitrate: null,
       sourceLabel: "",
       urlIndex: 0,
       error: null,

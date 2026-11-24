@@ -5,7 +5,7 @@
 > DOM/CSS-контракт, подводные камни и маршруты «задача → файлы».
 > Открывай код только по маршруту из §11 и только нужные файлы.
 >
-> Версия проекта: **2.4.0** · обновлено: 2026-11-24
+> Версия проекта: **2.5.0** · обновлено: 2026-11-24
 > Если этот файл расходится с кодом — прав код; обнови файл.
 
 ---
@@ -47,7 +47,9 @@ MultiRadio — одностраничное интернет-радио **без
 Открывается двойным кликом по `index.html` (`file://`), также работает с любого
 статического сервера.
 
-- 8 станций, у каждой основной URL и до 5 резервных.
+- 8 станций; у каждой до 6 источников, и **у каждой ссылки свой битрейт**.
+  При запуске выбирается доступный источник с максимальным битрейтом, затем
+  остальные по убыванию.
 - Плеер: play/pause, стоп, next/prev, громкость, mute.
 - 10-полосный эквалайзер (Web Audio `BiquadFilterNode`), 7 пресетов.
 - Группы станций и избранное, поиск и фильтры.
@@ -129,17 +131,17 @@ utils → config/app → config/stations → config/equalizer → storage → st
 
 | Файл | Отвечает за | Ключевые функции / экспорт |
 |---|---|---|
-| `js/config/app.js` | Версия, ключ хранилища, интервалы, лимиты, режимы, окно тайм-машины, подписи статусов | `MR.config`, `MR.config.playbackLabels` |
-| `js/config/stations.js` | 8 стартовых станций | `MR.defaults.stations` |
+| `js/config/app.js` | Версия, ключ хранилища, интервалы, лимиты (источники/битрейт), режимы, окно тайм-машины, подписи статусов | `MR.config` (`audio.maxSources`, `minBitrate`, `maxBitrate`), `MR.config.playbackLabels` |
+| `js/config/stations.js` | 8 стартовых станций с источниками и битрейтами | `MR.defaults.stations` |
 | `js/config/equalizer.js` | 10 полос EQ, 7 пресетов | `MR.defaults.eqBands`, `eqPresets`, `findPreset(gains)` |
-| `js/core/utils.js` | Чистые функции | `el`, `clamp`, `slugify`, `isHttpUrl`, `parseUrlList`, `pluralRu`, `formatDuration`, `formatRelative`, `formatBytes`, `debounce`, `prefersReducedMotion`, `uid` |
+| `js/core/utils.js` | Чистые функции | `el`, `clamp`, `slugify`, `isHttpUrl`, `parseUrlList`, `normalizeBitrate`, `formatBitrate`, `pluralRu`, `formatDuration`, `formatRelative`, `formatBytes`, `debounce`, `prefersReducedMotion`, `uid` |
 | `js/core/storage.js` | Безопасный localStorage + memory fallback | `get`, `set`, `remove`, `size`, `isAvailable` |
 | `js/core/state.js` | Единое состояние, действия, события, нормализация, persist, импорт/экспорт | `MR.store` (§5) |
 | `js/core/dom.js` | DOM-хелперы | `$`, `$$`, `el`, `on`, `delegate`, `setText`, `setHidden`, `toggleClass`, `focusFirst`, `ready` |
 | `js/services/analyser.js` | Один `AnalyserNode` на всё приложение | `attach(node)`, `detach()`, `read(now)`, `size`, `isAttached` |
-| `js/services/audio.js` | `<audio>` + Web Audio, фолбэки, compat-режим, громкость, EQ | `init`, `dispose`, `playStation`, `toggle`, `pause`, `stop`, `next`, `prev`, `isCompat`, `isGraphReady`, `getSourceLabel` |
+| `js/services/audio.js` | `<audio>` + Web Audio, перебор источников по битрейту, compat-режим, громкость, EQ | `init`, `dispose`, `playStation`, `toggle`, `pause`, `stop`, `next`, `prev`, `isCompat`, `isGraphReady`, `getSourceLabel` |
 | `js/services/network.js` | online/offline, `navigator.connection`, контрольные запросы | `init`, `check`, `dispose` |
-| `js/services/health.js` | Проверка URL через `Audio(preload=metadata)`, пул, прогресс | `init`, `run({manual})`, `dispose`, `isRunning` |
+| `js/services/health.js` | Проверка каждого URL через `Audio(preload=metadata)`, пул, прогресс | `init`, `run({manual})`, `dispose`, `isRunning` |
 | `js/services/stats.js` | Статистика прослушивания (секунды по станциям/жанрам) | `init`, `getSummary`, `reset`, `dispose` |
 | `js/services/recorder.js` | Запись эфира через MediaRecorder в файл | `start`, `stop`, `isRecording`, `supported`, `dispose` |
 | `js/services/timemachine.js` | Буфер последних минут и перемотка в WAV (окно — из настроек) | `init`, `availableSeconds`, `prepare`, `playFrom`, `seek`, `resume`, `returnLive`, `isEnabled`, `isBufferPlaying`, `maxSeconds`, `dispose` |
@@ -149,13 +151,13 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/views.js` | Вкладки «Станции/Избранные/Эквалайзер» | `init`, `apply`, `set(view)` |
 | `js/ui/nav.js` | Выпадающие меню, keyboard, mobile drawer, галочки | `init`, `closeAll` |
 | `js/ui/header.js` | Бейджи сети/плеера, прогресс проверки, `document.title` | `init` |
-| `js/ui/player.js` | Карточка «сейчас играет», управление, громкость, `Space` | `init`, `render` |
-| `js/ui/stations.js` | Списки станций/избранного, поиск, фильтры, вид «список/плитка», точки здоровья | `init`, `render` |
+| `js/ui/player.js` | Карточка «сейчас играет», управление, громкость, чипы битрейта/источника, `Space` | `init`, `render` |
+| `js/ui/stations.js` | Списки станций/избранного, поиск, фильтры, вид «список/плитка», точки здоровья (с учётом битрейта) | `init`, `render` |
 | `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр группы, аккордеон (не более одной открытой), прокрутка >5 и поиск >10 | `init`, `render`, `openEditor(groupId)` |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы | `init`, `tick(analysis)`, `update` |
-| `js/ui/station-form.js` | Добавление/редактирование/удаление станции | `init`, `open({mode, stationId})` |
+| `js/ui/station-form.js` | Добавление/редактирование/удаление станции, динамические строки источников (URL + битрейт) | `init`, `open({mode, stationId})` |
 | `js/ui/settings.js` | Настройки вида, compat, буфер эфира, export/import (глобальный drag-and-drop только для JSON, замена или слияние), reset | `init`, `open` |
-| `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка | `init`, `render`, `dispose` |
+| `js/ui/info.js` | Карточка «Источники и сеть», список источников текущей станции, ручная проверка | `init`, `render`, `dispose` |
 | `js/ui/sleep-timer.js` | Таймер сна в шапке: отсчёт и остановка радио | `init`, `start(minutes)`, `cancel`, `dispose`, `remainingMs` |
 | `js/ui/voice-search.js` | Голосовой подбор станции (Web Speech API + локальный матчер) | `init`, `start`, `stop`, `match(text)`, `supported`, `dispose` |
 | `js/ui/stats.js` | Панель статистики: станции и жанры | `init`, `render` |
@@ -180,7 +182,8 @@ utils → config/app → config/stations → config/equalizer → storage → st
 
 ```js
 {
-  stations: [{ id, name, genre, bitrate, emoji, primary, fallbacks: [] }],
+  stations: [{ id, name, genre, emoji,
+               sources: [{ url, bitrate }] }],  // bitrate — целое кбит/с, 0 = неизвестен
   favorites: Set<id>,
   groups: [{ id, name, stationIds: [] }],        // станция максимум в одной группе
   filters: { favoritesOnly, groupId, query },
@@ -188,7 +191,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
 
   playback: {
     status: 'idle'|'connecting'|'buffering'|'playing'|'paused'|'error'|'blocked',
-    stationId, urlIndex, url, sourceLabel, isPlaying, error
+    stationId, urlIndex, url, bitrate, sourceLabel, isPlaying, error
   },
 
   volume: 0..1,
@@ -196,7 +199,7 @@ utils → config/app → config/stations → config/equalizer → storage → st
   eqGains: number[10],       // −20..+20 дБ
   eqPreset: 'flat'|'bass'|'vocal'|'rock'|'jazz'|'electronic'|'night'|'custom',
 
-  health: { [stationId]: { primary: Probe, fallbacks: Probe[], checkedAt } },
+  health: { [stationId]: { sources: Probe[], checkedAt } },
   healthProgress: { running, done, total, stationsDone, stationsTotal, startedAt, finishedAt },
 
   network: { online, status: 'checking'|'online'|'restricted'|'offline',
@@ -217,31 +220,40 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | Группа | Сигнатуры |
 |---|---|
 | Жизненный цикл | `init()`, `on(event, fn) → off`, `emit(event, detail)`, `save()`, `saveNow()`, `serialize()`, `hydrate(data)` |
-| Селекторы | `findStation(id)`, `getStationIndex(id)`, `getCurrentStation()`, `getGroup(id)`, `getGroupOfStation(id)`, `getVisibleStations()`, `getStationUrls(station)`, `getHealth(id)`, `getHealthSummary()` |
+| Селекторы | `findStation(id)`, `getStationIndex(id)`, `getCurrentStation()`, `getGroup(id)`, `getGroupOfStation(id)`, `getVisibleStations()`, `getStationSources(station)`, `getStationUrls(station)`, `getPlaybackOrder(station)`, `getPlaybackSources(station)`, `getStationBitrate(station)`, `getHealth(id)`, `getHealthSummary()` |
 | Станции | `addStation(input) → {ok, station?, errors}`, `updateStation(id, input) → {ok, station, errors, streamChanged}`, `removeStation(id)`, `validateStationInput(input, excludeId?)` |
 | Избранное | `toggleFavorite(id)`, `clearFavorites()` |
 | Группы | `addGroup({name, stationIds})`, `updateGroup(id, input)`, `deleteGroup(id)`, `assignStationToGroup(stationId, groupId\|null)`, `removeStationFromGroup(stationId, groupId)`, `validateGroupInput(input, excludeId?)` |
 | Фильтры | `setFilters({favoritesOnly?, groupId?, query?})`, `clearFilters()` |
 | Плеер/звук | `setPlayback(patch)`, `setVolume(0..1)`, `toggleMute()`, `setEqGain(i, дБ)`, `setEqGains(arr)`, `applyEqPreset(key)`, `resetEq()` |
-| Проверка | `setHealth(id, result)`, `setHealthBatch(map)`, `setHealthProgress(patch)` |
+| Проверка | `setHealth(id, {sources, checkedAt})`, `setHealthBatch(map)`, `setHealthProgress(patch)` |
 | Сеть/вид | `setNetwork(patch)`, `setView(view)`, `setBgEnabled(bool)`, `toggleBg()`, `setVisualizerMode(mode)`, `setMiniMode(mode)`, `setStationView('list'\|'grid')`, `setTheme('dark'\|'light')`, `setCompatMode(bool)`, `setBufferEnabled(bool)`, `setBufferMinutes(n)` |
 | Данные | `exportData() → v2-объект`, `importData(obj, {mode:'replace'\|'merge'}) → {ok, mode, counts\|error}`, `resetAll()`, `restoreDefaultStations()` |
 
 ### 5.3 Входные данные
 
 ```js
-// Станция
-{ name, emoji, genre, bitrate, primary, fallbacks: string[] | "url1, url2", groupId }
-// Ошибки: { field: "текст" }, field ∈ name|genre|bitrate|primary|fallbacks|groupId|general
+// Станция (новый формат)
+{ name, emoji, genre, sources: [{ url, bitrate }], groupId }
+// Ошибки: { field: "текст" }, field ∈ name|groupId|general|sources
+//         и построчные sources.<i>.url / sources.<i>.bitrate
+// Старый формат входа тоже принимается: { primary, fallbacks, bitrate }
 // Группа
 { name, stationIds: string[] }   // ошибки: name|general
 ```
 
-Правила: имя станции/группы уникально без учёта регистра; `primary` — абсолютный
-`http(s)` URL; `fallbacks` без дублей и без `primary`, ≤5; станция состоит
-максимум в одной группе; удаление станции чистит избранное, группы и здоровье.
+Правила: имя станции/группы уникально без учёта регистра; у станции 1–6
+источников (`config.audio.maxSources`); URL — абсолютный `http(s)`, без дублей
+внутри станции и у других станций; битрейт — целое 8–1024 кбит/с, пусто или `0`
+означает «неизвестен»; станция состоит максимум в одной группе; удаление станции
+чистит избранное, группы и здоровье.
 `id` новой станции генерируется из названия (`utils.slugify`, транслитерация
 кириллицы) и всегда соответствует `[a-z0-9-]`; при совпадении добавляется `-2`, `-3`.
+
+Порядок воспроизведения не совпадает с порядком ввода: `getPlaybackOrder()`
+сортирует источники по убыванию битрейта (при равенстве — по порядку ввода,
+неизвестный битрейт — в конце). `playback.urlIndex` и `sourceLabel` считаются
+в этом порядке; `health.sources` — в порядке ввода (как `station.sources`).
 
 ### 5.4 События
 
@@ -271,7 +283,7 @@ payload**. Обработчик обязан делать `payload = payload || 
 ```js
 {
   app: "MultiRadio", version: 2, savedAt,
-  stations: [{ id, name, genre, bitrate, emoji, primary, fallbacks }],
+  stations: [{ id, name, genre, emoji, sources: [{ url, bitrate }] }],
   favorites: [id], groups: [{ id, name, stationIds }],
   volume, muted, eq: { gains: [10], preset }, view,
   ui: { bgEnabled, mode, miniMode, stationView, theme, compatMode,
@@ -287,7 +299,9 @@ payload**. Обработчик обязан делать `payload = payload || 
 `defaultMinutes = 3`. Выключение освобождает PCM, скрывает ползунок и LIVE.
 
 `hydrate(data)` понимает v1: `volume`, `equalizer[]`, `favorites`, `groups`,
-`stationGroups` (маппинг → membership), `stations`.
+`stationGroups` (маппинг → membership), `stations`. Станции старого формата
+(`primary`/`fallbacks` + общий `bitrate`) нормализуются в `sources`: общий
+битрейт проставляется каждой ссылке, дубли и невалидные URL отбрасываются.
 Сохранение — debounce 300 мс; `saveNow()` — немедленно.
 
 Статистика прослушивания хранится отдельным ключом `multiradio:stats:v1`:
@@ -377,7 +391,7 @@ document.querySelector("#stations-list").appendChild(row);
           group-modal-subtitle, gr-name, group-station-options, group-submit,
           group-delete, group-form-error
 Станция:  modal-station, station-form, station-modal-title, station-modal-subtitle,
-          st-name, st-emoji, st-genre, st-bitrate, st-primary, st-fallbacks,
+          st-name, st-emoji, st-genre, st-sources, st-add-source, bitrate-options,
           st-group, station-submit, station-delete, station-form-error
 Настройки: modal-settings, setting-bg, setting-mode, setting-compat,
           setting-buffer, setting-buffer-minutes, import-file,
@@ -385,7 +399,7 @@ document.querySelector("#stations-list").appendChild(row);
 Прочее:   modal-confirm, confirm-title, confirm-message, confirm-ok, confirm-cancel,
           modal-import, import-title, import-warning, import-merge, import-replace,
           import-cancel, import-drop, drop-overlay, info-connection, info-connection-state,
-          info-source, info-bitrate,
+          info-source, info-bitrate, info-sources,
           info-playback, info-health, recheck-btn, recheck-label,
           stats-total, stats-stations, stats-genres, stats-empty,
           bg-visualizer, bg-canvas, uptime, toast-region
@@ -417,6 +431,7 @@ document.querySelector("#stations-list").appendChild(row);
 | Группы | `.group-card`, `.is-filtered`, `.is-expanded`, `.group-card__head/__toggle/__chev/__stations/__actions`, `.group-station`, `.groups-search`, `.groups-list.is-scrollable` |
 | Модалки | `.modal`, `.modal__backdrop/__panel/__header/__body/__footer` |
 | Формы | `.form`, `.form-grid`, `.field`, `.field--span2`, `.field__error`, `.input`, `.checklist`, `.check-item` |
+| Источники | `.sources-list`, `.source-row`, `.source-row__url/__rate/__bitrate/__unit/__remove/__error`, `#st-add-source`, `.info-sources`, `.info-sources__title/__list`, `.info-source`, `.is-best`, `.is-current` |
 | Тосты | `.toast-region`, `.toast--success|error|warning|info` |
 | Drag&drop импорта | `.drop-overlay`, `.drop-overlay__panel/__icon/__title/__hint`, `body.is-file-dragging`, `.import-drop`, `.is-dragover` |
 | Визуализация | `.bg-visualizer.is-hidden`, `.mini-visualizer`, `body.is-viz-mode`, `.nav-group--view`, `.viz-btn[aria-pressed]` |
@@ -452,8 +467,10 @@ document.querySelector("#stations-list").appendChild(row);
   **до** первой загрузки — иначе Web Audio не получит данные.
 - `createMediaElementSource` можно вызвать для элемента только один раз.
   Поэтому режим совместимости **пересоздаёт** `<audio>` и закрывает контекст.
-- Цепочка источников: `primary`, затем `fallbacks` по порядку.
-  Таймаут подключения — 12 с; пауза перед резервом — 0.7 с.
+- Порядок источников: `store.getPlaybackSources()` сортирует их по убыванию
+  битрейта (при равенстве — как введены); `playback.urlIndex` — позиция в этом
+  порядке, `playback.bitrate` — битрейт текущего источника. Таймаут
+  подключения — 12 с; пауза перед резервом — 0.7 с.
 - Если все адреса не загрузились и Web Audio включён — включается
   `ui.compatMode`: прямой звук без анализа, EQ/спектр отключаются.
   Повтор с первого URL; если и там ошибка — `playback.status='error'`.
@@ -521,7 +538,9 @@ document.querySelector("#stations-list").appendChild(row);
 - пул 10 воркеров, таймаут 6 с; одинаковые URL разных станций проверяются
   один раз (дедупликация), станции без адресов завершаются сразу;
 - прогресс: `done/total` по источникам и `stationsDone/stationsTotal` по станциям;
-- результат станции: `{primary: Probe, fallbacks: Probe[], checkedAt}`;
+- результат станции: `{sources: Probe[], checkedAt}` — по одному Probe на
+  источник в порядке `station.sources`; сводка «онлайн» учитывает лучший битрейт,
+  «только резерв» — когда лучший недоступен, но другой источник жив;
 - адрес, который сейчас звучит, не проверяется повторно (`reason: "now-playing"`):
   второй запрос к тому же потоку может оборвать вещание;
 - автораз в 90 с (только видимая вкладка), вручную — `MR.health.run({manual:true})`;
@@ -546,10 +565,11 @@ VPN точно определить нельзя — не обещать это�
 | Новая кнопка/действие | `ui/commands.js` + модуль-владелец | `index.html`, `init()` модуля | `commands.has(name)`, клик |
 | Список станций, поиск, фильтры, избранное | `ui/stations.js`, `store.getVisibleStations` | `ui/stations.js` | список/empty state/фильтр |
 | Валидация или добавление станции | `core/state.js` (`validateStationInput`, `addStation`), `ui/station-form.js` | оба + `index.html` (modal) | `tests/store.test.js` |
+| Источники и битрейт станции | `state.js` (`normalizeStationSources`, `getPlaybackSources`, `validateStationInput`), `ui/station-form.js`, `services/audio.js` | те же + `config/stations.js`, `config/app.js` | тесты порядка/валидации, smoke формы |
 | Поля станции в хранилище | `state.js::normalizeStation`, `serialize`, `hydrate` | те же + `config/stations.js`, форма | тесты, reload |
 | Группы и фильтр группы | `state.js` (group actions), `ui/groups.js`, `ui/stations.js` | те же + modal в HTML | тесты, создание/фильтр, прокрутка/поиск |
 | Плеер, play/pause, громкость | `ui/player.js`, `services/audio.js` | те же | клик, статус, звук |
-| Фолбэки, CORS, compat | `services/audio.js` | `audio.js` (+ `ui/settings.js`, если настройка) | аудио-тест/локальный WAV |
+| Фолбэки, CORS, compat | `services/audio.js`, `state.js::getPlaybackSources` | `audio.js` (+ `ui/settings.js`, если настройка) | аудио-тест/локальный WAV |
 | Эквалайзер, пресеты, полосы | `config/equalizer.js`, `ui/equalizer.js`, `audio.js::applyEq` | те же | 10 полос, пресет, метры |
 | Визуализатор, режимы, canvas | `visualizer/*`, `analyser.js` | те же + `visualizer.css` | скриншот, `level>0`, нет ошибок |
 | Режим визуализации (шапка) | `visualizer/index.js`, `index.html` (header), `css/layout.css` | те же | клик туда/обратно, `Esc`, скрытие панелей |
@@ -565,7 +585,7 @@ VPN точно определить нельзя — не обещать это�
 | Настройки, export/import | `ui/settings.js`, `state.js::exportData/importData` | те же + `modal-settings`/`modal-import`/`#drop-overlay`/`components.css` | экспорт→импорт, v1-файл, замена, слияние, drop файла в любое место окна, буфер |
 | Тема, цвета, отступы | `css/base.css` + конкретный css | css | визуальный просмотр |
 | Адаптив | `css/layout.css`, `css/player.css`, `css/components.css` | css | 390/768/1440 |
-| Тесты логики | `tests/store.test.js` | тест + код | 23/23 |
+| Тесты логики | `tests/store.test.js` | тест + код | 29/29 |
 
 ---
 
@@ -575,8 +595,12 @@ VPN точно определить нельзя — не обещать это�
 1. `config/stations.js` — добавить поле в стартовые станции (опционально).
 2. `state.js`: `normalizeStation` (чтение/валидация), `validateStationInput`
    (правило), `addStation`/`updateStation` (проброс), `serialize`/`hydrate`.
-3. `index.html`: поле в `#station-form` + `data-error-for`.
-4. `ui/station-form.js`: `FIELD_IDS`, `open()`, `collect()`.
+   Если поле относится к источнику — `normalizeStationSources` и построчные
+   ошибки `sources.<i>.<field>`.
+3. `index.html`: поле в `#station-form` + `data-error-for` (для источника —
+   строка в `#st-sources`).
+4. `ui/station-form.js`: `FIELD_IDS` (статическое) или `createSourceRow`/
+   `collectSources` (источник), `open()`, `collect()`.
 5. `ui/stations.js::createRow` — если поле видно в списке.
 6. `tests/store.test.js` — добавить проверку сохранения/валидации.
 7. `AI_PROMPT.md` — обновить схему состояния/persist, если поле сохраняется.
@@ -642,7 +666,15 @@ VPN точно определить нельзя — не обещать это�
   `const x = payload || store.state.X`.
 - `store.state.favorites` — это `Set`, а не массив.
 - `state.groups[].stationIds` — единственный источник membership.
-- Нельзя менять `station.primary` напрямую: используй `updateStation`.
+- Источники станции — `station.sources: [{url, bitrate}]` в порядке ввода;
+  битрейт — число кбит/с (`0` = неизвестен), не строка. Нельзя менять
+  `station.sources` напрямую: используй `updateStation` с полным `sources`.
+- Порядок воспроизведения ≠ порядок ввода: `getPlaybackOrder`/`getPlaybackSources`
+  сортируют по убыванию битрейта, `playback.urlIndex` — позиция в этом порядке.
+  `health.sources[i]` соответствует `station.sources[i]` (исходный порядок).
+- Старый вход/хранилище (`primary`/`fallbacks` + общий `bitrate`) поддерживается
+  только на входе `normalizeStation`/`validateStationInput`; новый код работает
+  с `sources`. Общий битрейт при миграции проставляется каждой ссылке.
 - Перерисовка списков уничтожает DOM-узлы; не сохраняй ссылки на строки
   между событиями.
 - `render()` в `stations.js`/`groups.js` вызывается через rAF-коалесинг;
@@ -708,7 +740,7 @@ node --check js/path/to/file.js
 **Логика (обязательно при изменении store/config):**
 ```bash
 node tests/store.test.js
-# ожидается: 23 passed, 0 failed
+# ожидается: 29 passed, 0 failed
 ```
 
 **Браузерный дымовой тест (Chrome DevTools Protocol):**
@@ -719,14 +751,15 @@ chrome --headless=new --no-sandbox --disable-gpu \
 # затем:
 node tests/browser-smoke.js "file:///.../index.html" "<ws-endpoint>" tests/screenshots
 ```
-Проверяет: загрузку, меню, группу, фильтр, валидацию/добавление станции,
-EQ, фон (переключатель в меню «Вид»), три режима визуализации потока
-(переключение + отрисовка), пять фоновых режимов (отрисовка каждого),
-режим визуализации туда/обратно,
+Проверяет: загрузку, меню, группу, фильтр, валидацию/добавление станции
+с источниками и битрейтами, EQ, фон (переключатель в меню «Вид»), три режима
+визуализации потока (переключение + отрисовка), пять фоновых режимов
+(отрисовка каждого), режим визуализации туда/обратно,
 настройки, мобильный drawer, реальный звук через WAV data-URL,
-уровень анализатора, отрисовку canvas, тайм-машину (отмотка, пауза сохраняет
-буфер, seek на паузе, продолжение Play, настройки буфера),
-`console.error`/исключения.
+уровень анализатора, отрисовку canvas, чипы битрейта/источника,
+список источников в карточке «Источники и сеть»,
+тайм-машину (отмотка, пауза сохраняет буфер, seek на паузе, продолжение Play,
+настройки буфера), `console.error`/исключения.
 Ожидается `consoleErrors: []`, `exceptions: []`, `localPlayback.state: "playing"`.
 
 **Минимальный ручной чек-лист:**
@@ -746,7 +779,7 @@ EQ, фон (переключатель в меню «Вид»), три режи�
 - [ ] Логика меняется только через `MR.store`; события публикуются.
 - [ ] Нет новых `innerHTML` с пользовательскими данными.
 - [ ] Нет `alert/confirm/prompt` и второго rAF/AudioContext.
-- [ ] `node --check` пройден; тесты логики — 23/23.
+- [ ] `node --check` пройден; тесты логики — 29/29.
 - [ ] Для визуальных правок проверены 390px и 1440px.
 - [ ] Для новой команды/модуля/поля обновлены `AI_PROMPT.md` и, при
       необходимости, `ARCHITECTURE.md`/`README.md`.

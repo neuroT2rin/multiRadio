@@ -40,6 +40,16 @@
     });
   }
 
+  function bitrateSummary(station) {
+    const values = store.getStationSources(station)
+      .map(function (source) { return source.bitrate; })
+      .filter(Boolean);
+    if (!values.length) return "битрейт не указан";
+    const max = Math.max.apply(null, values);
+    const unique = Array.from(new Set(values));
+    return unique.length > 1 ? "до " + max + " kbps" : max + " kbps";
+  }
+
   function healthInfo(station) {
     const health = store.getHealth(station.id);
     if (!health) {
@@ -49,19 +59,38 @@
       return { state: "unknown", title: "Ещё не проверялась" };
     }
 
-    const primary = health.primary || {};
-    const fallbacks = health.fallbacks || [];
-    const fallback = fallbacks.find(function (item) { return item.ok; });
+    const probes = Array.isArray(health.sources) ? health.sources : [];
+    if (!probes.length) return { state: "unknown", title: "Нет источников для проверки" };
 
-    if (primary.ok) {
-      return { state: "online", title: "Основной источник отвечает" };
+    const sources = store.getStationSources(station);
+    const order = store.getPlaybackOrder(station);
+    const bestIndex = order[0];
+    const bestProbe = probes[bestIndex];
+    const bestBitrate = store.getStationBitrate(station);
+    const bestLabel = bestBitrate ? "Источник " + bestBitrate + " kbps" : "Лучший источник";
+
+    if (bestProbe && bestProbe.ok) {
+      return { state: "online", title: bestLabel + " отвечает" };
     }
-    if (fallback) {
-      return { state: "fallback", title: "Основной не отвечает, доступен резерв" };
+
+    const workingIndex = order.find(function (index) {
+      return probes[index] && probes[index].ok;
+    });
+
+    if (workingIndex !== undefined) {
+      const workingBitrate = sources[workingIndex] ? sources[workingIndex].bitrate : 0;
+      const workingLabel = workingBitrate ? workingBitrate + " kbps" : "резервный";
+      return {
+        state: "fallback",
+        title: (bestBitrate ? bestBitrate + " kbps" : "Лучший источник") +
+          " не отвечает, доступен " + workingLabel,
+      };
     }
+
+    const reason = bestProbe && bestProbe.reason;
     return {
       state: "offline",
-      title: "Источники недоступны" + (primary.reason ? " · " + (REASONS[primary.reason] || primary.reason) : ""),
+      title: "Источники недоступны" + (reason ? " · " + (REASONS[reason] || reason) : ""),
     };
   }
 
@@ -89,7 +118,7 @@
       dom.el("span", { class: "station-row__body" },
         nameLine,
         dom.el("span", { class: "station-row__meta" },
-          station.genre + " · " + station.bitrate)
+          station.genre + " · " + bitrateSummary(station))
       )
     );
 

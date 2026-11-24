@@ -5,7 +5,7 @@
 > описание потоков данных и инвариантов; к нему обращаются при изменении
 > архитектуры.
 >
-> Версия: **2.4.0** · обновлено: 2026-11-24.
+> Версия: **2.5.0** · обновлено: 2026-11-24.
 
 Документ для людей и нейросетей: где что лежит, кто за что отвечает,
 как модули общаются и куда добавлять новое.
@@ -48,20 +48,20 @@ utils → config/app → config/stations → config/equalizer → storage → st
 
 | Файл | Ответственность |
 |---|---|
-| `js/core/utils.js` | Чистые функции: DOM-хелпер `el()`, `clamp`, `slugify`, `isHttpUrl`, `parseUrlList`, форматирование, `debounce`. |
+| `js/core/utils.js` | Чистые функции: DOM-хелпер `el()`, `clamp`, `slugify`, `isHttpUrl`, `parseUrlList`, `normalizeBitrate`, `formatBitrate`, форматирование, `debounce`. |
 | `js/core/storage.js` | Безопасная обёртка `localStorage` с fallback в память. |
 | `js/core/state.js` | Стор: состояние, селекторы, действия, события, нормализация, persist, импорт/экспорт (замена и слияние), миграция v1. |
 | `js/core/dom.js` | `$`, `$$`, `on`, `delegate`, `setText`, `setHidden`, `ready`, `focusFirst`. |
-| `js/config/app.js` | Версия, ключи хранилища (состояние и статистика), интервалы, лимиты, списки режимов/тем, подписи статусов. |
+| `js/config/app.js` | Версия, ключи хранилища (состояние и статистика), интервалы, лимиты источников и битрейта, списки режимов/тем, подписи статусов. |
 | `js/config/stations.js` | 8 стартовых станций с проверенными потоками и резервами. |
 | `js/config/equalizer.js` | 10 полос, 7 пресетов, поиск пресета по усилениям. |
 | `js/services/analyser.js` | Один `AnalyserNode`: спектр (64 полосы), энергии EQ (10), RMS, бас/середина/верх, бит. |
-| `js/services/audio.js` | `<audio>` + цепочка Web Audio, перебор источников, таймаут, режим совместимости, громкость, EQ, захват потока для записи и PCM-ответвление для тайм-машины. |
+| `js/services/audio.js` | `<audio>` + цепочка Web Audio, перебор источников по убыванию битрейта, таймаут, режим совместимости, громкость, EQ, захват потока для записи и PCM-ответвление для тайм-машины. |
 | `js/services/network.js` | `online/offline`, `navigator.connection`, проверка контрольных хостов. |
-| `js/services/health.js` | Проверка URL через `Audio(preload=metadata)`, пул 10, дедупликация, пропуск играющего адреса, прогресс. |
+| `js/services/health.js` | Проверка каждого URL через `Audio(preload=metadata)`, пул 10, дедупликация, пропуск играющего адреса, прогресс, Probe по источникам. |
 | `js/services/stats.js` | Статистика прослушивания: секунды по станциям и жанрам, отдельный ключ localStorage. |
 | `js/services/recorder.js` | Запись эфира через `MediaRecorder` в локальный файл (webm/ogg), лимит 60 минут. |
-| `js/services/timemachine.js` | PCM-буфер последних 3 минут, отмотка в WAV, беззвучный живой эфир во время буфера. |
+| `js/services/timemachine.js` | PCM-буфер последних минут (окно из настроек), отмотка в WAV, беззвучный живой эфир во время буфера. |
 | `js/ui/commands.js` | Шина `data-command` → обработчик; регистрация команд модулями. |
 | `js/ui/toast.js` | Уведомления; подписан на `store.on('notice')`. |
 | `js/ui/modal.js` | Открытие/закрытие, Escape, backdrop, focus trap, `confirm()` через Promise. |
@@ -72,9 +72,9 @@ utils → config/app → config/stations → config/equalizer → storage → st
 | `js/ui/stations.js` | Списки станций и избранного, поиск, фильтры, точки здоровья, вид «список/плитка», empty states. |
 | `js/ui/groups.js` | CRUD групп, модалка, чекбоксы, фильтр, аккордеон (не более одной открытой), прокрутка после 5 групп, поиск после 10. |
 | `js/ui/equalizer.js` | Ползунки, пресеты, индикаторы; `tick(analysis)` вызывает визуализатор. |
-| `js/ui/station-form.js` | Добавление/редактирование/удаление станции с валидацией. |
+| `js/ui/station-form.js` | Добавление/редактирование/удаление станции с валидацией; динамические строки «URL + битрейт». |
 | `js/ui/settings.js` | Настройки вида, compat, экспорт/импорт с выбором «Заменить/Объединить», drag-and-drop JSON, сброс. |
-| `js/ui/info.js` | Карточка «Источники и сеть», ручная проверка, относительное время. |
+| `js/ui/info.js` | Карточка «Источники и сеть», список источников текущей станции с битрейтами, ручная проверка, относительное время. |
 | `js/ui/stats.js` | Панель статистики: топ станций и жанров, сброс. |
 | `js/ui/sleep-timer.js` | Таймер сна в шапке: пресеты, обратный отсчёт, остановка радио. |
 | `js/ui/voice-search.js` | Голосовой подбор станции: Web Speech API + встроенная модель Chrome или локальный матчер. |
@@ -90,17 +90,17 @@ utils → config/app → config/stations → config/equalizer → storage → st
 
 ```js
 state = {
-  stations: [{ id, name, genre, bitrate, emoji, primary, fallbacks: [] }],
+  stations: [{ id, name, genre, emoji, sources: [{ url, bitrate }] }],
   favorites: Set<string>,
   groups: [{ id, name, stationIds: string[] }],   // станция максимум в одной группе
   filters: { favoritesOnly, groupId, query },
   view: 'stations' | 'favorites' | 'equalizer',
-  playback: { status, stationId, urlIndex, url, sourceLabel, isPlaying, error },
+  playback: { status, stationId, urlIndex, url, bitrate, sourceLabel, isPlaying, error },
   volume: 0..1,
   muted: bool,
   eqGains: number[10],
   eqPreset: 'flat' | ... | 'custom',
-  health: { [stationId]: { primary: Probe, fallbacks: Probe[], checkedAt } },
+  health: { [stationId]: { sources: Probe[], checkedAt } },
   healthProgress: { running, done, total, stationsDone, stationsTotal, startedAt, finishedAt },
   network: { online, status, effectiveType, downlink },
   ui: {
@@ -124,15 +124,19 @@ state = {
   membership невозможен — `addGroup`/`updateGroup`/`assignStationToGroup`
   вычищают станцию из остальных групп.
 - `favorites` содержит только существующие `id`; при удалении станции чистится.
-- `primary` и `fallbacks` — только абсолютные `http(s)` URL, без дублей, ≤5 резервов.
+- `station.sources` — 1–6 источников `{url, bitrate}`: только абсолютные
+  `http(s)` URL, без дублей внутри станции и между станциями; `bitrate` — целое
+  кбит/с (`0` = неизвестен). Порядок ввода хранится, но воспроизведение идёт
+  по убыванию битрейта.
 - При удалении текущей станции `playback` сбрасывается в `idle`, звук останавливается.
 - Импорт в режиме `merge` не меняет текущие настройки звука/вида: только
   станции (по имени), группы (по имени) и избранное дополняются.
 
 ### Persist
 
-- `multiradio:state:v2` — станции, группы, избранное, громкость, EQ, вид и
-  весь блок `ui` (включая тему и режимы визуализации).
+- `multiradio:state:v2` — станции (`sources`), группы, избранное, громкость, EQ,
+  вид и весь блок `ui` (включая тему и режимы визуализации). Станции старого
+  формата (`primary`/`fallbacks` + общий `bitrate`) нормализуются при загрузке.
 - `multiradio:stats:v1` — `{ totalSeconds, stations: { id: { seconds, lastAt } },
   genres: { name: seconds } }`. Статистика не входит в export/import и
   сбрасывается командой `stats:reset`.
@@ -189,9 +193,11 @@ state = {
 ### Запуск станции
 
 1. `station:play` → `MR.audio.playStation(id)`.
-2. Движок берёт URL из стора, ставит `connecting`, создаёт (один раз)
+2. Движок берёт источники из `store.getPlaybackSources()` — они отсортированы
+   по убыванию битрейта — и ставит `connecting`, создаёт (один раз)
    `AudioContext` и граф `source → gain → EQ×10 → analyser → destination`.
-3. `<audio crossOrigin="anonymous">` грузит поток.
+3. `<audio crossOrigin="anonymous">` грузит поток; `playback.bitrate` и
+   `sourceLabel` показывают текущий источник.
 4. `playing` → `status='playing'`; анализатор отдаёт данные визуализатору,
    PCM-ответвление тайм-машины пишет эфир, статистика начинает считать время.
 5. Ошибка/таймаут 12 с → следующий URL. Все адреса не удались → режим
@@ -203,7 +209,9 @@ state = {
    проверяется (`now-playing`) — второй запрос мог бы оборвать вещание.
 2. Пул из 10 воркеров запускает `Audio(preload=metadata)` без `crossOrigin`.
 3. После probe обновляется `health:progress`; завершённая станция получает
-   `health` и точку в списке.
+   `health.sources` (по одному Probe на источник в порядке `station.sources`)
+   и точку в списке. Сводка «онлайн» учитывает лучший битрейт, «только резерв» —
+   когда лучший недоступен, но другой источник жив.
 4. Финиш: `health:progress` с `running:false`, сводка на 1,5 с, полоса скрывается.
 5. Автозапуск: через 0,25 с после старта и далее каждые 90 с (на видимой вкладке).
 
@@ -316,7 +324,7 @@ compat-режиме запись недоступна (штатный отказ
 ## Тесты
 
 - `tests/store.test.js` — логика без DOM: валидация, группы, фильтры,
-  сохранение, миграция, сброс, настройки буфера (23 проверки).
+  сохранение, миграция, сброс, настройки буфера, битрейты и порядок источников (29 проверок).
 - `tests/browser-smoke.js` — реальный Chromium через CDP: загрузка, меню,
   группы (аккордеон, прокрутка, поиск), фильтр, станции и вид «плитка»,
   эквалайзер, фон, пять фоновых режимов, режим визуализации, настройки,
