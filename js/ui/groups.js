@@ -22,6 +22,7 @@
   let checklist = null;
   let submitButton = null;
   let deleteButton = null;
+  let shareButton = null;
   let title = null;
   let subtitle = null;
   let errorBox = null;
@@ -103,6 +104,11 @@
     nameInput.value = group ? group.name : "";
     submitButton.textContent = group ? "Сохранить" : "Создать";
     deleteButton.hidden = !group;
+    if (shareButton) {
+      shareButton.hidden = !group;
+      if (group) shareButton.dataset.groupId = group.id;
+      else delete shareButton.dataset.groupId;
+    }
 
     clearErrors();
     buildChecklist(group ? group.stationIds : []);
@@ -360,6 +366,7 @@
     checklist = dom.$("#group-station-options");
     submitButton = dom.$("#group-submit");
     deleteButton = dom.$("#group-delete");
+    shareButton = dom.$("#group-share");
     title = dom.$("#group-modal-title");
     subtitle = dom.$("#group-modal-subtitle");
     errorBox = dom.$("#group-form-error");

@@ -1216,6 +1216,162 @@ async function main() {
   await evaluate(`MR.modal.close('#modal-search')`);
   await sleep(200);
 
+  // Передача станции и группы по ссылке (#share=).
+  // 1. Кнопка «Ссылка» в форме редактирования станции открывает #modal-share.
+  results.shareStationLink = await evaluate(`(() => {
+    const usable = MR.store.state.stations.filter((item) =>
+      item.sources.length && item.sources.every((source) => MR.utils.isHttpUrl(source.url)));
+    const station = usable.find((item) => item.name === 'Тестовая станция') || usable[0];
+    MR.stationForm.open({ mode: 'edit', stationId: station.id });
+    const button = document.querySelector('#station-share');
+    const visible = Boolean(button) && !button.hidden && button.type === 'button';
+    if (button) button.click();
+    const input = document.querySelector('#share-link');
+    return {
+      visible: visible,
+      modalOpen: !document.querySelector('#modal-share').hidden,
+      title: document.querySelector('#share-title').textContent,
+      hasShare: (input.value || '').includes('#share='),
+      readonly: input.readOnly,
+      linkRowVisible: !document.querySelector('#share-link-row').hidden,
+      copyVisible: !document.querySelector('#share-copy').hidden,
+      addHidden: document.querySelector('#share-add').hidden,
+      formStillOpen: !document.querySelector('#modal-station').hidden,
+    };
+  })()`);
+  await sleep(200);
+  // Настоящий клик (trusted gesture), чтобы сработал буфер обмена.
+  const copyPoint = await evaluate(`(() => {
+    const rect = document.querySelector('#share-copy').getBoundingClientRect();
+    return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+  })()`);
+  await cdp.send("Input.dispatchMouseEvent", {
+    type: "mousePressed", x: copyPoint.x, y: copyPoint.y, button: "left", clickCount: 1,
+  });
+  await cdp.send("Input.dispatchMouseEvent", {
+    type: "mouseReleased", x: copyPoint.x, y: copyPoint.y, button: "left", clickCount: 1,
+  });
+  await sleep(350);
+  results.shareCopy = await evaluate(`(() => {
+    const toast = document.querySelector('#toast-region .toast:last-child');
+    return {
+      copied: Boolean(toast && toast.classList.contains('toast--success')),
+      toast: toast ? toast.textContent : '',
+    };
+  })()`);
+  await screenshot("share-link.png");
+  await evaluate(`(() => {
+    document.querySelector('#share-cancel').click();
+    MR.modal.close('#modal-station');
+  })()`);
+  await sleep(200);
+  results.shareClosed = await evaluate(`(() => ({
+    shareClosed: document.querySelector('#modal-share').hidden,
+    stationClosed: document.querySelector('#modal-station').hidden,
+  }))()`);
+
+  // 2. apply(): станция добавляется, повторный вызов не создаёт дубликат.
+  results.shareApplyStation = await evaluate(`(() => {
+    const before = MR.store.state.stations.length;
+    const payload = {
+      v: 1, type: 'station',
+      station: {
+        name: 'Ссылочная станция', genre: 'Ambient', emoji: '🔗',
+        sources: [{ url: 'https://example.com/share-station.mp3', bitrate: 192 }],
+      },
+    };
+    const first = MR.share.apply(payload);
+    const afterFirst = MR.store.state.stations.length;
+    const duplicate = MR.share.apply(payload);
+    const added = MR.store.state.stations.find((item) => item.name === 'Ссылочная станция');
+    return {
+      firstOk: first.ok,
+      duplicate: duplicate.duplicate === true,
+      addedCount: afterFirst - before,
+      total: MR.store.state.stations.length,
+      sources: added ? added.sources : [],
+    };
+  })()`);
+
+  // 3. Входящая ссылка: hash → предпросмотр → «Добавить» → hash очищен.
+  results.shareIncomingOpen = await evaluate(`(() => {
+    const link = MR.share.buildStationLink({
+      name: 'Хеш-станция', genre: 'Test', emoji: '🔗',
+      sources: [{ url: 'https://example.com/hash-share.mp3', bitrate: 128 }],
+    });
+    location.hash = link.slice(link.indexOf('#'));
+    const parsed = MR.share.parseLocation();
+    const opened = MR.share.processLocation();
+    return {
+      parsedOk: parsed.ok,
+      opened: opened,
+      modalOpen: !document.querySelector('#modal-share').hidden,
+      title: document.querySelector('#share-title').textContent,
+      addVisible: !document.querySelector('#share-add').hidden,
+      preview: document.querySelectorAll('#share-preview .share-source').length,
+    };
+  })()`);
+  await sleep(200);
+  await screenshot("share-incoming.png");
+  results.shareIncoming = await evaluate(`(() => {
+    document.querySelector('#share-add').click();
+    return {
+      added: Boolean(MR.store.state.stations.find((item) => item.name === 'Хеш-станция')),
+      closed: document.querySelector('#modal-share').hidden,
+      hashCleared: !String(location.hash).includes('share='),
+      toast: [...document.querySelectorAll('.toast')].some((node) =>
+        node.textContent.includes('Хеш-станция')),
+    };
+  })()`);
+
+  // 4. Кнопка «Ссылка» в форме группы и состав группы в payload.
+  results.shareGroupLink = await evaluate(`(() => {
+    const station = MR.store.state.stations.find((item) =>
+      item.sources.length && item.sources.every((source) => MR.utils.isHttpUrl(source.url)));
+    MR.store.addGroup({ name: 'Группа для ссылки', stationIds: station ? [station.id] : [] });
+    const group = MR.store.state.groups.find((item) => item.name === 'Группа для ссылки');
+    MR.groupsUI.openEditor(group.id);
+    const button = document.querySelector('#group-share');
+    const visible = Boolean(button) && !button.hidden;
+    if (button) button.click();
+    const link = document.querySelector('#share-link').value || '';
+    const parsed = MR.share.parsePayload(link.split('#share=')[1] || '');
+    const result = {
+      visible: visible,
+      modalOpen: !document.querySelector('#modal-share').hidden,
+      title: document.querySelector('#share-title').textContent,
+      type: parsed.ok ? parsed.payload.type : '',
+      stations: parsed.ok && parsed.payload.stations ? parsed.payload.stations.length : 0,
+    };
+    document.querySelector('#share-cancel').click();
+    MR.modal.close('#modal-group');
+    return result;
+  })()`);
+
+  // 5. apply() группы: существующая станция переиспользуется, группа получает stationIds.
+  results.shareApplyGroup = await evaluate(`(() => {
+    const payload = {
+      v: 1, type: 'group', group: { name: 'Ссылочная группа' },
+      stations: [
+        { name: 'Ссылочная станция', genre: 'Ambient', emoji: '🔗',
+          sources: [{ url: 'https://example.com/share-station.mp3', bitrate: 192 }] },
+        { name: 'Групповая станция', genre: 'Chill', emoji: '🎧',
+          sources: [{ url: 'https://example.com/share-group-station.mp3', bitrate: 256 }] },
+      ],
+    };
+    const before = MR.store.state.stations.length;
+    const result = MR.share.apply(payload);
+    const group = MR.store.state.groups.find((item) => item.name === 'Ссылочная группа');
+    return {
+      ok: result.ok,
+      stationsAdded: MR.store.state.stations.length - before,
+      reused: result.stationsReused,
+      group: Boolean(group),
+      stationIds: group ? group.stationIds.length : 0,
+      names: group ? group.stationIds.map((id) => (MR.store.findStation(id) || {}).name) : [],
+    };
+  })()`);
+
   // Мобильный вид
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
