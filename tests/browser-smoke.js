@@ -178,7 +178,7 @@ async function main() {
     modalClosed: document.querySelector('#modal-group').hidden,
     cards: document.querySelectorAll('#groups-list .group-card').length,
     name: document.querySelector('.group-card__name')?.textContent || '',
-    collapsedChips: document.querySelectorAll('.group-station').length,
+    collapsedChips: document.querySelectorAll('.group-card__stations:not([hidden]) .group-station').length,
     ariaExpanded: document.querySelector('.group-card__toggle').getAttribute('aria-expanded'),
     toasts: document.querySelectorAll('.toast--success').length,
   }))()`);
