@@ -1118,6 +1118,48 @@ body.modal-open {
   color: var(--text-dim);
 }
 
+/* Панель статистики (модальное тело) */
+.stats-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stats-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+}
+
+.stats-panel .stats-total {
+  margin-top: 0;
+}
+
+.stats-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.stats-panel .stats-block {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.stats-panel .stats-list {
+  max-height: 280px;
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.stats-panel .stats-empty {
+  margin-top: 0;
+}
+
 /* --------------------------------------------------------------------------
    Информация о сети
    -------------------------------------------------------------------------- */
@@ -1374,6 +1416,15 @@ body.modal-open {
 
   .modal__footer {
     padding-inline: 16px;
+  }
+
+  .stats-panel__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .stats-panel .stats-list {
+    max-height: 220px;
   }
 
   .info-row {
