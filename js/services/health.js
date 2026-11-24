@@ -19,6 +19,11 @@
   let intervalId = null;
   let startTimer = null;
 
+  /** Автопроверки выполняются, только если пользователь их не выключил. */
+  function autoCheckEnabled() {
+    return store.state.ui.autoHealthCheck !== false;
+  }
+
   /**
    * Проверяет один адрес через <audio preload="metadata">.
    * Это точнее, чем HEAD: подтверждает, что поток реально декодируется.
@@ -280,6 +285,7 @@
 
   function schedule() {
     intervalId = setInterval(function () {
+      if (!autoCheckEnabled()) return;
       if (document.visibilityState === "hidden") return;
       if (running) return;
       run({ manual: false });
@@ -289,6 +295,7 @@
   function init() {
     // Небольшая задержка, чтобы интерфейс успел отрисоваться.
     startTimer = setTimeout(function () {
+      if (!autoCheckEnabled()) return;
       run({ manual: false });
     }, 250);
 
@@ -296,6 +303,7 @@
 
     document.addEventListener("visibilitychange", function () {
       if (document.visibilityState !== "visible" || running) return;
+      if (!autoCheckEnabled()) return;
       if (Date.now() - lastFinishedAt > config.health.intervalMs) {
         run({ manual: false });
       }
