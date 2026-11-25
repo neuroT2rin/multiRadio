@@ -411,6 +411,93 @@ async function main() {
     };
   })()`);
 
+  // Режим «Спираль»: кохлеарный спектр. Выбор из меню, непустой canvas в
+  // музыке и в тишине, устойчивость к смене режима и бюджет кадра.
+  results.spiralMode = await evaluate(`(() => {
+    const item = document.querySelector('.nav-item[data-command="ui:mode"][data-mode="spiral"]');
+    item.click();
+
+    const spectrum = Array.from({ length: 64 }, (_, i) => Math.min(
+      1,
+      0.04 +
+        0.8 * Math.exp(-Math.pow((i - 6) / 5, 2)) +
+        0.45 * Math.exp(-Math.pow((i - 52) / 7, 2))
+    ));
+    const fake = {
+      active: true, silent: false, level: 0.62, bass: 0.58, mid: 0.4, treble: 0.5, beat: true,
+      spectrum: spectrum,
+      wave: new Uint8Array(1024).fill(128),
+    };
+    const canvas = document.querySelector('#bg-canvas');
+    const ctx = canvas.getContext('2d');
+    const count = () => {
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let pixels = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 0) pixels += 1;
+      return pixels;
+    };
+
+    MR.bg.draw(fake, 33, performance.now());
+    const pixels = count();
+
+    // Смена режима туда и обратно: canvas не пустеет, мод применяется.
+    MR.store.setVisualizerMode('spectrum');
+    MR.bg.draw(fake, 33, performance.now());
+    MR.store.setVisualizerMode('spiral');
+    MR.bg.draw(fake, 33, performance.now());
+    const afterSwitch = MR.bg.mode === 'spiral' ? count() : 0;
+
+    // Тишина: спираль остаётся читаемой, а не пустым экраном.
+    MR.bg.draw(null, 0, performance.now() + 40);
+    const idlePixels = count();
+
+    // Бюджет кадра: 60 отрисовок подряд на этом же canvas.
+    const started = performance.now();
+    for (let i = 0; i < 60; i += 1) MR.bg.draw(fake, 33, started + i * 33);
+    const avgFrameMs = Math.round(((performance.now() - started) / 60) * 100) / 100;
+
+    return {
+      checked: item.getAttribute('aria-checked'),
+      state: MR.store.state.ui.mode,
+      mode: MR.bg.mode,
+      pixels: pixels,
+      afterSwitch: afterSwitch,
+      idlePixels: idlePixels,
+      avgFrameMs: avgFrameMs,
+      canvas: [canvas.width, canvas.height],
+      viewport: [window.innerWidth, window.innerHeight],
+      empty: pixels === 0,
+      idleEmpty: idlePixels === 0,
+    };
+  })()`);
+  await screenshot("spiral.png");
+
+  // Спираль на мобильном экране: canvas переживает resize до 390×844.
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
+  });
+  await sleep(600);
+  results.spiralMobile = await evaluate(`(() => {
+    const canvas = document.querySelector('#bg-canvas');
+    const ctx = canvas.getContext('2d');
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let pixels = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] > 0) pixels += 1;
+    return {
+      mode: MR.bg.mode,
+      pixels: pixels,
+      canvas: [canvas.width, canvas.height],
+      viewport: [window.innerWidth, window.innerHeight],
+      empty: pixels === 0,
+    };
+  })()`);
+  await screenshot("spiral-mobile.png");
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false,
+  });
+  await sleep(500);
+  await evaluate(`document.querySelector('.nav-item[data-command="ui:mode"][data-mode="spectrum"]').click()`);
+
   // Режим «Голос»: пункт меню, aria-checked, отрисовка (не пустой canvas).
   results.voiceMode = await evaluate(`(() => {
     const item = document.querySelector('.nav-item[data-command="ui:mode"][data-mode="voice"]');

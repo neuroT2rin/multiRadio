@@ -1,10 +1,15 @@
 /**
  * visualizer/background.js — полноэкранная визуализация.
  *
- * Три режима:
+ * Шесть режимов:
  *  • spectrum — круговой спектр с ядром, кольцами и частицами;
  *  • aurora   — слоистые волны, реагирующие на бас;
- *  • orbit    — орбиты со шлейфами и звёздами.
+ *  • orbit    — орбиты со шлейфами и звёздами;
+ *  • tunnel   — полёт сквозь органический 3D-туннель;
+ *  • spiral   — кохлеарный спектр: угол = частота, радиус точки = энергия
+ *               полосы, цвет — градиент по частоте; бас качает ядро, удар
+ *               гонит волну по рукавам, высокие зажигают искры;
+ *  • voice    — форманты и осциллограмма для чистой речи.
  *
  * Canvas масштабируется под devicePixelRatio, размеры пересчитываются
  * только при реальном изменении окна (а не каждый кадр, как раньше).
@@ -48,6 +53,24 @@
   /** «Голос»: число точек осциллограммы и оттенки трёх формантных полос. */
   const VOICE_POINTS = 128;
   const VOICE_HUES = [176, 198, 262];
+
+  /**
+   * «Спираль»: два симметричных рукава, каждый — вся логарифмическая шкала
+   * частот (64 полосы `analysis.spectrum`): низ у ядра, верх на внешних витках.
+   */
+  const SPIRAL_ARMS = 2;
+  const SPIRAL_TURNS = 1.9;
+  const SPIRAL_STEPS = 128;
+  const SPIRAL_BINS = 64;
+  const SPIRAL_SPARKS = 22;
+  const SPIRAL_SQUASH = 0.74;
+  const SPIRAL_INNER = 0.055;
+  const SPIRAL_OUTER = 0.42;
+  /** Вынос точки наружу на максимальную энергию полосы, доля от base. */
+  const SPIRAL_SPREAD = 0.05;
+  /** Оттенок низа (фиолетовый) и верха (бирюзовый) — градиент по частоте. */
+  const SPIRAL_HUE_LOW = 286;
+  const SPIRAL_HUE_HIGH = 170;
 
   let tunnelProgress = 0;
   let tunnelLastAt = 0;
@@ -124,6 +147,14 @@
   let rotation = 0;
   let lastAnalysis = null;
 
+  /** Состояние «Спирали»: вращение, волна от удара, искры внешних витков. */
+  let spiralSpin = 0;
+  let spiralLastAt = 0;
+  let spiralRipple = 0;
+  let spiralLastRippleAt = -1e9;
+  let spiralBassAvg = 0;
+  const spiralSparks = [];
+
   function hsla(hue, saturation, lightness, alpha) {
     return "hsla(" + hue + ", " + saturation + "%, " + lightness + "%, " + alpha + ")";
   }
@@ -171,6 +202,21 @@
         trail: [],
       };
     });
+  }
+
+  /** Искры внешних витков создаются один раз: в кадре только координаты. */
+  function buildSpiralSparks() {
+    spiralSparks.length = 0;
+    for (let i = 0; i < SPIRAL_SPARKS; i += 1) {
+      spiralSparks.push({
+        angle: randomBetween(0, Math.PI * 2),
+        t: randomBetween(0.58, 1.06),
+        speed: randomBetween(0.00012, 0.00042),
+        phase: randomBetween(0, Math.PI * 2),
+        size: randomBetween(0.55, 1.6),
+        alpha: randomBetween(0.3, 0.9),
+      });
+    }
   }
 
   function resize() {
@@ -995,6 +1041,28 @@
     ctx.restore();
   }
 
+  /* ------------------------------------------------------------------ */
+  /* «Спираль» — кохлеарный (спектральный) спектр.                       */
+  /* Угол вдоль рукава — логарифм частоты: низкие полосы у ядра, высокие */
+  /* на внешних витках. Радиус точки — энергия полосы, цвет — градиент   */
+  /* по частоте, движение — вращение и волна от удара.                   */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Радиус вдоль рукава: t = 0 — низкие частоты, t = 1 — высокие.
+   * Рост логарифмический (равные октавы — равные углы, как в улитке):
+   * витки расходятся наружу, поэтому спираль читается как спираль,
+   * а не как набор концентрических колец.
+   */
+  function spiralRadius(t, inner, outer) {
+    return inner * Math.pow(outer / inner, t);
+  }
+
+  /** Цвет по частоте: фиолетовый низ → бирюзовый верх. */
+  function spiralHue(t) {
+    return lerpHue(SPIRAL_HUE_LOW, SPIRAL_HUE_HIGH, smoothStep(utils.clamp(t, 0, 1)));
+  }
+
   function drawSpiral(analysis, now, hue, energy, idle) {
     const cx = width / 2;
     const cy = height * 0.5;
@@ -1002,61 +1070,217 @@
     const level = idle ? 0 : utils.clamp(analysis.level, 0, 1);
     const bass = idle ? 0 : utils.clamp(analysis.bass, 0, 1);
     const treble = idle ? 0 : utils.clamp(analysis.treble, 0, 1);
-    const maxRadius = base * 0.45;
-    const arms = 4;
-    const dots = 120;
-    const spin = now * (0.00004 + treble * 0.00014) + rotation * 0.6;
+    // Без данных (пауза, CORS) — ровное «дыхание» спирали, а не пустой экран.
+    const spectrum = !idle && analysis && analysis.spectrum && !analysis.silent
+      ? analysis.spectrum
+      : null;
+    // В тишине добавляем ровное свечение: спираль должна читаться и без музыки.
+    const idleGlow = spectrum ? 0 : 1;
+    const glow = utils.clamp(energy, 0, 1);
+
+    const dt = spiralLastAt ? utils.clamp(now - spiralLastAt, 0, 80) / 1000 : 0.016;
+    spiralLastAt = now;
+
+    // Вращение: спокойный дрейф, который под музыку ускоряется громкостью и
+    // высокими. Один оборот — не самоцель, а «проигрывание» времени.
+    spiralSpin += dt * (0.05 + level * 0.16 + treble * 0.05);
+
+    // Удар запускает волну вдоль рукавов. Атаку баса ловим и отдельно: фон
+    // рисуется реже кадров анализатора, и часть ударов иначе терялась бы.
+    spiralBassAvg += (bass - spiralBassAvg) * (1 - Math.exp(-dt * 2.2));
+    const onset = !idle && bass > 0.16 && bass > spiralBassAvg * 1.3;
+    const beat = !idle && Boolean(analysis && analysis.beat);
+    if ((beat || onset) && now - spiralLastRippleAt >= 280) {
+      spiralRipple = 0.0001;
+      spiralLastRippleAt = now;
+    }
+
+    let ripple = -1;
+    if (spiralRipple > 0) {
+      spiralRipple += dt * 1.35;
+      if (spiralRipple >= 1.12) spiralRipple = 0;
+      else ripple = spiralRipple;
+    }
+    const rippleAmp = ripple >= 0 ? Math.pow(1 - ripple / 1.12, 0.65) : 0;
+
+    const inner = base * SPIRAL_INNER;
+    const outer = base * SPIRAL_OUTER;
+    const spread = base * SPIRAL_SPREAD;
+    const span = Math.PI * 2 * SPIRAL_TURNS;
+    const count = spectrum ? spectrum.length : SPIRAL_BINS;
+    const step = 1 / count;
+    const coreHue = lerpHue(SPIRAL_HUE_LOW, hue, 0.12);
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
 
-    // Спиральные рукава из светящихся точек.
-    for (let arm = 0; arm < arms; arm += 1) {
-      const armOffset = (Math.PI * 2 * arm) / arms;
+    // 1) Звёзды на фоне — глубина сцены.
+    for (let s = 0; s < stars.length; s += 2) {
+      const star = stars[s];
+      const twinkle = 0.35 + 0.65 * Math.abs(Math.sin(now * 0.0006 + star.phase));
+      ctx.beginPath();
+      ctx.arc(star.x * width, star.y * height, star.size * 0.9, 0, Math.PI * 2);
+      ctx.fillStyle = hsla(214, 70, 80, star.alpha * twinkle * 0.3);
+      ctx.fill();
+    }
 
-      for (let i = 0; i < dots; i += 1) {
-        const t = i / (dots - 1);
-        const radius = maxRadius * (0.06 + t * 0.98) * (1 + level * 0.05) *
-          (1 + bass * 0.01 * Math.sin(i * 0.5 + now * 0.002));
-        const angle = armOffset + t * 2.8 + spin;
+    // 2) Непрерывная ось спирали: сглаженный виток на оба рукава.
+    for (let arm = 0; arm < SPIRAL_ARMS; arm += 1) {
+      const armOffset = Math.PI * arm;
+      ctx.beginPath();
+      for (let s = 0; s <= SPIRAL_STEPS; s += 1) {
+        const t = s / SPIRAL_STEPS;
+        const angle = armOffset + t * span + spiralSpin;
+        const radius = spiralRadius(t, inner, outer) * (1 + bass * 0.012);
         const x = cx + Math.cos(angle) * radius;
-        const y = cy + Math.sin(angle) * radius * 0.7;
-        const alpha = (0.06 + energy * 0.34) * Math.pow(1 - t, 0.55);
-        const size = 0.5 + Math.pow(1 - t, 1.4) * 2.4 + level * 1.1;
+        const y = cy + Math.sin(angle) * radius * SPIRAL_SQUASH;
+        if (s === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = hsla(
+        lerpHue(spiralHue(0.5), hue, 0.1), 88, 64,
+        0.03 + glow * 0.045 + idleGlow * 0.02
+      );
+      ctx.lineWidth = base * 0.0045;
+      ctx.stroke();
+    }
+
+    // 3) Полосы спектра: сегмент оси светится энергией полосы, а точка
+    //    выносится наружу на её громкость. Толщина и яркость — от энергии.
+    for (let arm = 0; arm < SPIRAL_ARMS; arm += 1) {
+      const armOffset = Math.PI * arm;
+
+      for (let i = 0; i < count; i += 1) {
+        const t = (i + 0.5) * step;
+        const binEnergy = spectrum
+          ? Math.pow(utils.clamp(spectrum[i], 0, 1), 0.9)
+          : utils.clamp(
+            0.085 + 0.05 * Math.sin(i * 0.42 + now * 0.0011) +
+            0.025 * Math.sin(i * 0.13 - now * 0.0007),
+            0,
+            1
+          );
+        const boost = rippleAmp > 0
+          ? rippleAmp * Math.exp(-Math.pow((t - ripple) / 0.12, 2))
+          : 0;
+
+        const angle = armOffset + t * span + spiralSpin;
+        const nextAngle = angle + span * step;
+        const radius = spiralRadius(t, inner, outer);
+        const nextRadius = spiralRadius(t + step, inner, outer);
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const x = cx + cos * radius;
+        const y = cy + sin * radius * SPIRAL_SQUASH;
+        const nextX = cx + Math.cos(nextAngle) * nextRadius;
+        const nextY = cy + Math.sin(nextAngle) * nextRadius * SPIRAL_SQUASH;
 
         ctx.beginPath();
-        ctx.arc(x, y, size, 0, Math.PI * 2);
-        ctx.fillStyle = hsla(hue + t * 110 + arm * 14, 92, 68, Math.min(1, alpha));
+        ctx.moveTo(x, y);
+        ctx.lineTo(nextX, nextY);
+        ctx.strokeStyle = hsla(
+          spiralHue(t), 92, 66,
+          Math.min(1, 0.055 + binEnergy * 0.5 + boost * 0.4 + idleGlow * 0.03)
+        );
+        ctx.lineWidth = 0.7 + binEnergy * 2.6 + level * 0.7 + boost * 1.8;
+        ctx.stroke();
+
+        if (binEnergy < 0.035 && boost < 0.05) continue;
+
+        // Радиус точки = энергия полосы; цвет — её место на шкале частот.
+        // У ядра вынос мягче: там витки плотнее и полосы не должны слипаться.
+        const reach = spread * (0.5 + 0.5 * t);
+        const dotRadius = radius + reach * (binEnergy + boost * 0.55);
+        const dotX = cx + cos * dotRadius;
+        const dotY = cy + sin * dotRadius * SPIRAL_SQUASH;
+        const dotSize = 0.65 + binEnergy * 2.3 + level * 0.55 + boost * 1.5;
+        const alpha = Math.min(1, 0.12 + binEnergy * 0.8 + boost * 0.6 + idleGlow * 0.05);
+
+        if (binEnergy > 0.12 || boost > 0.15) {
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, dotSize * 2.6, 0, Math.PI * 2);
+          ctx.fillStyle = hsla(spiralHue(t) + 6, 95, 72, alpha * 0.13);
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
+        ctx.fillStyle = hsla(spiralHue(t) + 4, 96, 74, alpha);
         ctx.fill();
       }
     }
 
-    drawCoreGlow(cx, cy, base * (0.05 + level * 0.04), hue, energy);
+    // 4) Волна от удара бежит по рукавам от ядра к внешним виткам.
+    if (ripple >= 0) {
+      const from = Math.max(0, ripple - 0.14);
+      const to = Math.min(1, ripple + 0.14);
+      if (to > from) {
+        for (let arm = 0; arm < SPIRAL_ARMS; arm += 1) {
+          const armOffset = Math.PI * arm;
+          ctx.beginPath();
+          for (let s = 0; s <= 14; s += 1) {
+            const t = from + ((to - from) * s) / 14;
+            const angle = armOffset + t * span + spiralSpin;
+            const radius = spiralRadius(t, inner, outer);
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius * SPIRAL_SQUASH;
+            if (s === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.strokeStyle = hsla(spiralHue(ripple) + 10, 96, 80, 0.55 * rippleAmp);
+          ctx.lineWidth = 1.4 + rippleAmp * 2.2;
+          ctx.stroke();
+        }
+      }
+    }
 
-    const coreRadius = base * (0.06 + level * 0.05 + beatFlash * 0.02);
+    // 5) Ядро: низкие частоты пульсируют басом, громкостью и ударом.
+    const coreRadius = base * (0.05 + bass * 0.05 + level * 0.02 + beatFlash * 0.025);
+    const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius * 3.6);
+    coreGlow.addColorStop(0, hsla(coreHue, 95, 76, 0.3 + glow * 0.26));
+    coreGlow.addColorStop(0.38, hsla(coreHue - 8, 92, 62, 0.12 + glow * 0.12));
+    coreGlow.addColorStop(1, hsla(coreHue + 18, 90, 54, 0));
+    ctx.fillStyle = coreGlow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreRadius * 3.6, 0, Math.PI * 2);
+    ctx.fill();
+
     const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius);
-    core.addColorStop(0, hsla(hue + 30, 95, 76, Math.min(1, 0.6 + energy * 0.3)));
-    core.addColorStop(0.55, hsla(hue + 10, 92, 62, 0.2 + energy * 0.2));
-    core.addColorStop(1, hsla(hue, 90, 55, 0));
+    core.addColorStop(0, hsla(coreHue + 8, 100, 88, Math.min(1, 0.62 + glow * 0.3)));
+    core.addColorStop(0.6, hsla(coreHue, 95, 64, 0.22 + glow * 0.18));
+    core.addColorStop(1, hsla(coreHue - 14, 90, 52, 0));
     ctx.fillStyle = core;
     ctx.beginPath();
     ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.restore();
+    // 6) Высокие частоты — искры на внешних витках.
+    const sparkAlpha = 0.03 + treble * 0.62 + (spectrum ? 0 : 0.04);
+    if (sparkAlpha > 0.04) {
+      for (let i = 0; i < spiralSparks.length; i += 1) {
+        const spark = spiralSparks[i];
+        const twinkle = 0.4 + 0.6 * Math.abs(Math.sin(now * 0.0014 + spark.phase));
+        const alpha = sparkAlpha * spark.alpha * twinkle;
+        if (alpha < 0.02) continue;
 
-    if (beatFlash > 0.02) {
-      ctx.beginPath();
-      ctx.ellipse(
-        cx, cy,
-        base * (0.3 + (1 - beatFlash) * 0.2),
-        base * 0.2,
-        0, 0, Math.PI * 2
-      );
-      ctx.strokeStyle = hsla(hue + 60, 95, 72, beatFlash * 0.16);
-      ctx.lineWidth = 1.8;
-      ctx.stroke();
+        const baseAngle = spark.angle + spiralSpin * 1.7 + now * spark.speed;
+        const radius = spiralRadius(spark.t, inner, outer);
+
+        for (let trail = 2; trail >= 0; trail -= 1) {
+          const angle = baseAngle - trail * 0.035;
+          const x = cx + Math.cos(angle) * radius * (1 + trail * 0.012);
+          const y = cy + Math.sin(angle) * radius * SPIRAL_SQUASH * (1 + trail * 0.012);
+          ctx.beginPath();
+          ctx.arc(x, y, spark.size * (1 - trail * 0.22), 0, Math.PI * 2);
+          ctx.fillStyle = hsla(spiralHue(spark.t) + 12, 92, 84, alpha / (trail + 1));
+          ctx.fill();
+        }
+      }
     }
+
+    ctx.restore();
   }
 
   function draw(analysis, dtMs, now) {
@@ -1124,6 +1348,7 @@
     buildStars();
     buildOrbiters();
     buildVoice();
+    buildSpiralSparks();
     resize();
 
     global.addEventListener("resize", utils.debounce(resize, 160));
